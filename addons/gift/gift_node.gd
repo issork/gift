@@ -192,8 +192,6 @@ func handle_command(sender_data : Array, msg : PoolStringArray, whisper : bool =
 				return
 			if(cmd_data[1] != 0):
 				var user_perm_flags = get_perm_flag_from_tags(sender_data[2])
-				print(user_perm_flags & cmd_data[1])
-				print(cmd_data[1])
 				if(user_perm_flags & cmd_data[1] != cmd_data[1]):
 					emit_signal("cmd_no_permission", command, sender_data, cmd_data, arg_ary)
 					print_debug("No Permission for command!")
@@ -204,7 +202,6 @@ func handle_command(sender_data : Array, msg : PoolStringArray, whisper : bool =
 				cmd_data[0].call_func([sender_data, command, whisper], arg_ary)
 
 func get_perm_flag_from_tags(tags : Dictionary) -> int:
-	print(tags)
 	var flag = 0
 	var entry = tags.get("badges")
 	if(entry):
