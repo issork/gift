@@ -55,11 +55,11 @@ func _init():
 	user_regex.compile("(?<=!)[\\w]*(?=Q)")
 
 func _ready() -> void:
-	assert(websocket.connect("data_received", self, "data_received") == OK)
-	assert(websocket.connect("connection_established", self, "connection_established") == OK)
-	assert(websocket.connect("connection_closed", self, "connection_closed") == OK)
-	assert(websocket.connect("server_close_request", self, "sever_close_request") == OK)
-	assert(websocket.connect("connection_error", self, "connection_error") == OK)
+	websocket.connect("data_received", self, "data_received")
+	websocket.connect("connection_established", self, "connection_established")
+	websocket.connect("connection_closed", self, "connection_closed")
+	websocket.connect("server_close_request", self, "sever_close_request")
+	websocket.connect("connection_error", self, "connection_error")
 
 func connect_to_twitch() -> void:
 	if(websocket.connect_to_url("wss://irc-ws.chat.twitch.tv:443") != OK):
