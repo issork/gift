@@ -9,13 +9,25 @@
 config_version=4
 
 _global_script_classes=[ {
+"base": "Reference",
+"class": "CommandData",
+"language": "GDScript",
+"path": "res://addons/gift/util/cmd_data.gd"
+}, {
 "base": "Node",
 "class": "Gift",
 "language": "GDScript",
 "path": "res://addons/gift/gift_node.gd"
+}, {
+"base": "Reference",
+"class": "SenderData",
+"language": "GDScript",
+"path": "res://addons/gift/util/sender_data.gd"
 } ]
 _global_script_class_icons={
-"Gift": ""
+"CommandData": "",
+"Gift": "",
+"SenderData": ""
 }
 
 [application]

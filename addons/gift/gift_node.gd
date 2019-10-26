@@ -52,7 +52,7 @@ enum WhereFlag {
 
 func _init():
 	websocket.verify_ssl = true
-	user_regex.compile("(?<=!)[\\w]*(?=Q)")
+	user_regex.compile("(?<=!)[\\w]*(?=@)")
 
 func _ready() -> void:
 	websocket.connect("data_received", self, "data_received")
@@ -125,7 +125,7 @@ func add_command(cmd_name : String, instance : Object, instance_func : String, p
 	var func_ref = FuncRef.new()
 	func_ref.set_instance(instance)
 	func_ref.set_function(instance_func)
-	commands[cmd_name] = [func_ref, permission_level, max_args, min_args, where]
+	commands[cmd_name] = CommandData.new(func_ref, permission_level, max_args, min_args, where)
 
 # Removes a single command or alias.
 func remove_command(cmd_name : String) -> void:
@@ -137,7 +137,7 @@ func purge_command(cmd_name : String) -> void:
 	if(to_remove):
 		var remove_queue = []
 		for command in commands.keys():
-			if(commands[command][0] == to_remove[0]):
+			if(commands[command].func_ref == to_remove.func_ref):
 				remove_queue.append(command)
 		for queued in remove_queue:
 			commands.erase(queued)
@@ -165,50 +165,47 @@ func handle_message(message : String, tags : Dictionary) -> void:
 			print_debug("Authentication successful.")
 			emit_signal("login_attempt", true)
 		"PRIVMSG":
-			var sender_data : Array = [user_regex.search(msg[0]), msg[2], tags]
+			var sender_data : SenderData = SenderData.new(user_regex.search(msg[0]).get_string(), msg[2], tags)
 			handle_command(sender_data, msg)
 			emit_signal("chat_message", sender_data, msg[3].right(1))
 		"WHISPER":
-			var sender_data : Array = [user_regex.search(msg[0]), msg[2], tags]
+			var sender_data : SenderData = SenderData.new(user_regex.search(msg[0]).get_string(), msg[2], tags)
 			handle_command(sender_data, msg, true)
 			emit_signal("whisper_message", sender_data, msg[3].right(1))
 		_:
 			emit_signal("unhandled_message", message, tags)
 
-func handle_command(sender_data : Array, msg : PoolStringArray, whisper : bool = false) -> void:
+func handle_command(sender_data : SenderData, msg : PoolStringArray, whisper : bool = false) -> void:
 	if(command_prefixes.has(msg[3].substr(1, 1))):
 		var command : String  = msg[3].right(2)
-		var cmd_data = commands.get(command)
+		var cmd_data : CommandData = commands.get(command)
 		if(cmd_data):
 			var args = "" if msg.size() < 5 else msg[4]
 			var arg_ary : PoolStringArray = PoolStringArray() if args == "" else args.split(" ")
-			if(arg_ary.size() > cmd_data[2] && cmd_data[2] != -1):
+			if(arg_ary.size() > cmd_data.max_args && cmd_data.max_args != -1 || arg_ary.size() < cmd_data.min_args):
 				emit_signal("cmd_invalid_argcount", command, sender_data, cmd_data, arg_ary)
 				print_debug("Invalid argcount!")
 				return
-			if(arg_ary.size() < cmd_data[3]):
-				emit_signal("cmd_invalid_argcount", command, sender_data, cmd_data, arg_ary)
-				print_debug("Invalid argcount!")
-				return
-			if(cmd_data[1] != 0):
-				var user_perm_flags = get_perm_flag_from_tags(sender_data[2])
-				if(user_perm_flags & cmd_data[1] != cmd_data[1]):
+			if(cmd_data.permission_level != 0):
+				var user_perm_flags = get_perm_flag_from_tags(sender_data.tags)
+				if(user_perm_flags & cmd_data.permission_level != cmd_data.permission_level):
 					emit_signal("cmd_no_permission", command, sender_data, cmd_data, arg_ary)
 					print_debug("No Permission for command!")
 					return
 			if(arg_ary.size() == 0):
-				cmd_data[0].call_func([sender_data, command, whisper])
+				cmd_data.func_ref.call_func([sender_data, command, whisper])
 			else:
-				cmd_data[0].call_func([sender_data, command, whisper], arg_ary)
+				cmd_data.func_ref.call_func([sender_data, command, whisper], arg_ary)
 
 func get_perm_flag_from_tags(tags : Dictionary) -> int:
 	var flag = 0
 	var entry = tags.get("badges")
 	if(entry):
-		if(entry.has("vip/1")):
-			flag += PermissionFlag.VIP
-		if(entry.has("broadcaster/1")):
-			flag += PermissionFlag.STREAMER
+		for badge in entry:
+			if(badge.begins_with("vip")):
+				flag += PermissionFlag.VIP
+			if(badge.begins_with("broadcaster")):
+				flag += PermissionFlag.STREAMER
 	entry = tags.get("mod")
 	if(entry):
 		if(entry[0] == "1"):
