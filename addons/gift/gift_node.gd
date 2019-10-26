@@ -193,9 +193,9 @@ func handle_command(sender_data : SenderData, msg : PoolStringArray, whisper : b
 					print_debug("No Permission for command!")
 					return
 			if(arg_ary.size() == 0):
-				cmd_data.func_ref.call_func([sender_data, command, whisper])
+				cmd_data.func_ref.call_func(CommandInfo.new(sender_data, command, whisper))
 			else:
-				cmd_data.func_ref.call_func([sender_data, command, whisper], arg_ary)
+				cmd_data.func_ref.call_func(CommandInfo.new(sender_data, command, whisper), arg_ary)
 
 func get_perm_flag_from_tags(tags : Dictionary) -> int:
 	var flag = 0

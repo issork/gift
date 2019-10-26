@@ -44,21 +44,21 @@ func _ready() -> void:
 	whisper("TEST", "mennomax")
 
 # The cmd_data array contains [<sender_data (Array)>, <command_string (String)>, <whisper (bool)>
-func command_test(cmd_data):
+func command_test(cmd_info : CommandInfo) -> void:
 	print("A")
 
 # The cmd_data array contains [<sender_data (Array)>, <command_string (String)>, <whisper (bool)>
-func hello_world(cmd_data):
+func hello_world(cmd_info : CommandInfo) -> void:
 	chat("HELLO WORLD!")
 
-func streamer_only(cmd_data):
+func streamer_only(cmd_info : CommandInfo) -> void:
 	chat("Streamer command executed")
 
-func no_permission(cmd_data):
+func no_permission(cmd_info : CommandInfo) -> void:
 	chat("NO PERMISSION!")
 
-func greet(cmd_data, arg_ary):
+func greet(cmd_info : CommandInfo, arg_ary : PoolStringArray) -> void:
 	chat("Greetings, " + arg_ary[0])
 
-func list(cmd_data, arg_ary):
+func list(cmd_info : CommandInfo, arg_ary : PoolStringArray) -> void:
 	chat(arg_ary.join(", "))
