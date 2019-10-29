@@ -3,10 +3,12 @@ class_name Gift
 
 # The underlying websocket sucessfully connected to twitch.
 signal twitch_connected
-# The connection has been closed.
+# The connection has been closed. Not emitted if twitch announced a reconnect.
 signal twitch_disconnected
 # The connection to twitch failed.
 signal twitch_unavailable
+# Twitch requested the client to reconnect. (Will be unavailable until next connect)
+signal twitch_reconnect
 # The client tried to login. Returns true if successful, else false.
 signal login_attempt(success)
 # User sent a message in chat.
@@ -23,13 +25,19 @@ signal cmd_no_permission(cmd_name, sender_data, cmd_data, arg_ary)
 signal pong
 
 # Messages starting with one of these symbols are handled. '/' will be ignored, reserved by Twitch.
-export(Array, String) var command_prefixes = ["!"]
+export(PoolStringArray) var command_prefixes : Array = ["!"]
+# Time to wait after each sent chat message. Values below ~0.31 will lead to a disconnect after 100 messages.
+export(float) var chat_timeout = 0.32
 
-# Mapping of channels to their channel info, like currently connected users.
-var channels : Dictionary = {}
-var commands : Dictionary = {}
 var websocket : WebSocketClient = WebSocketClient.new()
 var user_regex = RegEx.new()
+var twitch_restarting
+# Twitch disconnects connected clients if too many chat messages are being sent. (At about 100 messages/30s)
+var chat_queue = []
+onready var chat_accu = chat_timeout
+# Mapping of channels to their channel info, like available badges.
+var channels : Dictionary = {}
+var commands : Dictionary = {}
 
 # Required permission to execute the command
 enum PermissionFlag {
@@ -69,6 +77,11 @@ func connect_to_twitch() -> void:
 func _process(delta : float) -> void:
 	if(websocket.get_connection_status() != NetworkedMultiplayerPeer.CONNECTION_DISCONNECTED):
 		websocket.poll()
+		if(!chat_queue.empty() && chat_accu >= chat_timeout):
+			send(chat_queue.pop_front())
+			chat_accu = 0
+		else:
+			chat_accu += delta
 
 # Login using a oauth token.
 # You will have to either get a oauth token yourself or use
@@ -80,13 +93,12 @@ func authenticate_oauth(nick : String, token : String) -> void:
 	send("NICK " + nick.to_lower())
 	request_caps()
 
-func request_caps(caps : Array = [":twitch.tv/commands", ":twitch.tv/tags", ":twitch.tv/membership"]) -> void:
-	for cap in caps:
-		send("CAP REQ " + cap)
+func request_caps(caps : String = "twitch.tv/commands twitch.tv/tags twitch.tv/membership") -> void:
+	send("CAP REQ :" + caps)
 
 # Sends a String to Twitch.
 func send(text : String, token : bool = false) -> void:
-	assert(websocket.get_peer(1).put_packet(text.to_utf8()) == OK)
+	websocket.get_peer(1).put_packet(text.to_utf8())
 	if(OS.is_debug_build()):
 		if(!token):
 			print("< " + text.strip_edges(false))
@@ -97,9 +109,9 @@ func send(text : String, token : bool = false) -> void:
 func chat(message : String, channel : String = ""):
 	var keys : Array = channels.keys()
 	if(channel != ""):
-		send("PRIVMSG " + ("" if channel.begins_with("#") else "#") + channel + " :" + message + "\r\n")
+		chat_queue.append("PRIVMSG " + ("" if channel.begins_with("#") else "#") + channel + " :" + message + "\r\n")
 	elif(keys.size() == 1):
-		send("PRIVMSG #" + channels.keys()[0] + " :" + message + "\r\n")
+		chat_queue.append("PRIVMSG #" + channels.keys()[0] + " :" + message + "\r\n")
 	else:
 		print_debug("No channel specified.")
 
@@ -115,13 +127,13 @@ func data_received() -> void:
 			message = msg[1]
 			for tag in msg[0].split(";"):
 				var pair = tag.split("=")
-				tags[pair[0]] = Array(pair[1].split(","))
+				tags[pair[0]] = pair[1]
 		if(OS.is_debug_build()):
 			print("> " + message)
 		handle_message(message, tags)
 
 # Registers a command on an object with a func to call, similar to connect(signal, instance, func).
-func add_command(cmd_name : String, instance : Object, instance_func : String, permission_level : int = PermissionFlag.EVERYONE, max_args : int = 0, min_args : int = 0, where : int = WhereFlag.CHAT) -> void:
+func add_command(cmd_name : String, instance : Object, instance_func : String, max_args : int = 0, min_args : int = 0, permission_level : int = PermissionFlag.EVERYONE, where : int = WhereFlag.CHAT) -> void:
 	var func_ref = FuncRef.new()
 	func_ref.set_instance(instance)
 	func_ref.set_function(instance_func)
@@ -146,7 +158,7 @@ func add_alias(cmd_name : String, alias : String) -> void:
 	if(commands.has(cmd_name)):
 		commands[alias] = commands.get(cmd_name)
 
-func add_aliases(cmd_name : String, aliases : Array) -> void:
+func add_aliases(cmd_name : String, aliases : PoolStringArray) -> void:
 	for alias in aliases:
 		add_alias(cmd_name, alias)
 
@@ -168,10 +180,13 @@ func handle_message(message : String, tags : Dictionary) -> void:
 			var sender_data : SenderData = SenderData.new(user_regex.search(msg[0]).get_string(), msg[2], tags)
 			handle_command(sender_data, msg)
 			emit_signal("chat_message", sender_data, msg[3].right(1))
+			print("TAGS: " + str(tags))
 		"WHISPER":
 			var sender_data : SenderData = SenderData.new(user_regex.search(msg[0]).get_string(), msg[2], tags)
 			handle_command(sender_data, msg, true)
 			emit_signal("whisper_message", sender_data, msg[3].right(1))
+		"RECONNECT":
+			twitch_restarting = true
 		_:
 			emit_signal("unhandled_message", message, tags)
 
@@ -201,18 +216,18 @@ func get_perm_flag_from_tags(tags : Dictionary) -> int:
 	var flag = 0
 	var entry = tags.get("badges")
 	if(entry):
-		for badge in entry:
+		for badge in entry.split(","):
 			if(badge.begins_with("vip")):
 				flag += PermissionFlag.VIP
 			if(badge.begins_with("broadcaster")):
 				flag += PermissionFlag.STREAMER
 	entry = tags.get("mod")
 	if(entry):
-		if(entry[0] == "1"):
+		if(entry == "1"):
 			flag += PermissionFlag.MOD
 	entry = tags.get("subscriber")
 	if(entry):
-		if(entry[0] == "1"):
+		if(entry == "1"):
 			flag += PermissionFlag.SUB
 	return flag
 
@@ -231,8 +246,17 @@ func connection_established(protocol : String) -> void:
 	emit_signal("twitch_connected")
 
 func connection_closed(was_clean_close : bool) -> void:
-	print_debug("Disconnected from Twitch.")
-	emit_signal("twitch_disconnected")
+	if(twitch_restarting):
+		print_debug("Reconnecting to Twitch")
+		emit_signal("twitch_reconnect")
+		connect_to_twitch()
+		yield(self, "twitch_connected")
+		for channel in channels.keys():
+			join_channel(channel)
+		twitch_restarting = false
+	else:
+		print_debug("Disconnected from Twitch.")
+		emit_signal("twitch_disconnected")
 
 func connection_error() -> void:
 	print_debug("Twitch is unavailable.")
