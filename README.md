@@ -10,6 +10,8 @@ Godot IRC For Twitch addon
 
 ***
 
+**The badge/emote downloading functionality is experimental, but should work. Please report issues you find here.**
+
 ### Examples
 
 The following code is also [included](https://github.com/MennoMax/gift/blob/master/Gift.gd) in this repository.
