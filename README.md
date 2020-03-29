@@ -1,12 +1,12 @@
 # GIFT
 Godot IRC For Twitch addon
 
-- [Examples](https://example.com)
-- [API](https://example.com)
-    - [Exported Variables](https://example.com)
-    - [Signals](https://example.com)
-    - [Functions](https://example.com)
-    - [Utility Classes](https://example.com)
+- [Examples](https://github.com/MennoMax/gift#Examples)
+- [API](https://github.com/MennoMax/gift#API)
+    - [Exported Variables](https://github.com/MennoMax/gift#Exported-Variables)
+    - [Signals](https://github.com/MennoMax/gift#Signals)
+    - [Functions](https://github.com/MennoMax/gift#Functions)
+    - [Utility Classes](https://github.com/MennoMax/gift#Utility-Classes)
 
 ***
 
