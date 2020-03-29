@@ -23,11 +23,21 @@ signal cmd_invalid_argcount(cmd_name, sender_data, cmd_data, arg_ary)
 signal cmd_no_permission(cmd_name, sender_data, cmd_data, arg_ary)
 # Twitch's ping is about to be answered with a pong.
 signal pong
+# Emote has been downloaded
+signal emote_downloaded(emote_id)
+# Badge has been downloaded
+signal badge_downloaded(badge_name)
 
 # Messages starting with one of these symbols are handled. '/' will be ignored, reserved by Twitch.
-export(PoolStringArray) var command_prefixes : Array = ["!"]
-# Time to wait after each sent chat message. Values below ~0.31 will lead to a disconnect after 100 messages.
+export(Array, String) var command_prefixes : Array = ["!"]
+# Time to wait after each sent chat message. Values below ~0.31 might lead to a disconnect after 100 messages.
 export(float) var chat_timeout = 0.32
+export(bool) var get_images : bool = false
+# If true, caches emotes/badges to disk, so that they don't have to be redownloaded on every restart.
+# This however means that they might not be updated if they change until you clear the cache.
+export(bool) var disk_cache : bool = false
+# Disk Cache has to be enbaled for this to work
+export(String, FILE) var disk_cache_path = "user://gift/cache"
 
 var websocket : WebSocketClient = WebSocketClient.new()
 var user_regex = RegEx.new()
@@ -38,6 +48,7 @@ onready var chat_accu = chat_timeout
 # Mapping of channels to their channel info, like available badges.
 var channels : Dictionary = {}
 var commands : Dictionary = {}
+var image_cache : ImageCache
 
 # Required permission to execute the command
 enum PermissionFlag {
@@ -68,6 +79,9 @@ func _ready() -> void:
 	websocket.connect("connection_closed", self, "connection_closed")
 	websocket.connect("server_close_request", self, "sever_close_request")
 	websocket.connect("connection_error", self, "connection_error")
+	if(get_images):
+		image_cache = ImageCache.new(disk_cache, disk_cache_path)
+		add_child(image_cache)
 
 func connect_to_twitch() -> void:
 	if(websocket.connect_to_url("wss://irc-ws.chat.twitch.tv:443") != OK):
@@ -180,7 +194,13 @@ func handle_message(message : String, tags : Dictionary) -> void:
 			var sender_data : SenderData = SenderData.new(user_regex.search(msg[0]).get_string(), msg[2], tags)
 			handle_command(sender_data, msg)
 			emit_signal("chat_message", sender_data, msg[3].right(1))
-			print("TAGS: " + str(tags))
+			if(get_images):
+				if(!image_cache.badge_map.has(tags["room-id"])):
+					image_cache.get_badge_mappings(tags["room-id"])
+				for emote in tags["emotes"].split("/", false):
+					image_cache.get_emote(emote.split(":")[0])
+				for badge in tags["badges"].split(",", false):
+					image_cache.get_badge(badge, tags["room-id"])
 		"WHISPER":
 			var sender_data : SenderData = SenderData.new(user_regex.search(msg[0]).get_string(), msg[2], tags)
 			handle_command(sender_data, msg, true)
@@ -195,6 +215,10 @@ func handle_command(sender_data : SenderData, msg : PoolStringArray, whisper : b
 		var command : String  = msg[3].right(2)
 		var cmd_data : CommandData = commands.get(command)
 		if(cmd_data):
+			if(whisper == true && cmd_data.where & WhereFlag.WHISPER != WhereFlag.WHISPER):
+				return
+			elif(whisper == false && cmd_data.where & WhereFlag.CHAT != WhereFlag.CHAT):
+				return 
 			var args = "" if msg.size() < 5 else msg[4]
 			var arg_ary : PoolStringArray = PoolStringArray() if args == "" else args.split(" ")
 			if(arg_ary.size() > cmd_data.max_args && cmd_data.max_args != -1 || arg_ary.size() < cmd_data.min_args):
@@ -263,10 +287,4 @@ func connection_error() -> void:
 	emit_signal("twitch_unavailable")
 
 func server_close_request(code : int, reason : String) -> void:
-	pass
-
-func _enter_tree() -> void:
-	pass
-
-func _exit_tree() -> void:
 	pass
