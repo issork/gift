@@ -13,4 +13,3 @@ func _init(f_ref : FuncRef, perm_lvl : int, mx_args : int, mn_args : int, whr : 
 	max_args = mx_args
 	min_args = mn_args
 	where = whr
-	
