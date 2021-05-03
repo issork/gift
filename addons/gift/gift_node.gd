@@ -12,9 +12,9 @@ signal twitch_reconnect
 # The client tried to login. Returns true if successful, else false.
 signal login_attempt(success)
 # User sent a message in chat.
-signal chat_message(sender_data, message, channel)
+signal chat_message(sender_data, message)
 # User sent a whisper message.
-signal whisper_message(sender_data, message, channel)
+signal whisper_message(sender_data, message)
 # Unhandled data passed through
 signal unhandled_message(message, tags)
 # A command has been called with invalid arg count
@@ -185,7 +185,7 @@ func handle_message(message : String, tags : Dictionary) -> void:
 		send("PONG :tmi.twitch.tv")
 		emit_signal("pong")
 		return
-	var msg : PoolStringArray = message.split(" ", true, 4)
+	var msg : PoolStringArray = message.split(" ", true, 3)
 	match msg[1]:
 		"001":
 			print_debug("Authentication successful.")
