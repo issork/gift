@@ -81,7 +81,6 @@ func _ready() -> void:
 	websocket.connect("connection_error", self, "connection_error")
 	if(get_images):
 		image_cache = ImageCache.new(disk_cache, disk_cache_path)
-#		add_child(image_cache)
 
 func connect_to_twitch() -> void:
 	if(websocket.connect_to_url("wss://irc-ws.chat.twitch.tv:443") != OK):

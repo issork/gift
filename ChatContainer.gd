@@ -13,21 +13,18 @@ func put_chat(senderdata : SenderData, msg : String):
 			for d in data[1].split(","):
 				var start_end = d.split("-")
 				locations.append(EmoteLocation.new(data[0], int(start_end[0]), int(start_end[1])))
-		locations.sort_custom(self, "greater")
+		locations.sort_custom(EmoteLocation, "smaller")
 		var offset = 0
 		for loc in locations:
 			var emote_string = "[img=center]" + $"../Gift".image_cache.get_emote(loc.id).resource_path +"[/img]"
 			msg = msg.substr(0, loc.start + offset) + emote_string + msg.substr(loc.end + offset + 1)
-			offset += emote_string.length() - loc.end - loc.start - 1
+			offset += emote_string.length() + loc.start - loc.end - 1
 	var bottom : bool = $Chat/ScrollContainer.scroll_vertical == $Chat/ScrollContainer.get_v_scrollbar().max_value - $Chat/ScrollContainer.get_v_scrollbar().rect_size.y
 	msgnode.set_msg(str(time["hour"]) + ":" + ("0" + str(time["minute"]) if time["minute"] < 10 else str(time["minute"])), senderdata, msg, badges)
 	$Chat/ScrollContainer/ChatMessagesContainer.add_child(msgnode)
 	yield(get_tree(), "idle_frame")
 	if (bottom):
 		$Chat/ScrollContainer.scroll_vertical = $Chat/ScrollContainer.get_v_scrollbar().max_value
-
-func smaller(a : EmoteLocation, b : EmoteLocation):
-	return a.start < b.start
 
 class EmoteLocation extends Reference:
 	var id : String
@@ -38,3 +35,6 @@ class EmoteLocation extends Reference:
 		self.id = emote_id
 		self.start = start_idx
 		self.end = end_idx
+
+	static func smaller(a : EmoteLocation, b : EmoteLocation):
+		return a.start < b.start

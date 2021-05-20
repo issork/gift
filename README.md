@@ -10,6 +10,10 @@ Godot IRC For Twitch addon
 
 ***
 
+Below is a working example of this plugin, which is included in this project. A replication of the twitch chat.
+
+![image](https://user-images.githubusercontent.com/12477395/119052327-b9fc9980-b9c4-11eb-8f45-a2a8f2d98977.png)
+
 ### Examples
 
 The following code is also [included](https://github.com/MennoMax/gift/blob/master/Gift.gd) in this repository.
