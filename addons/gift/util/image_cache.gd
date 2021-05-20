@@ -112,8 +112,6 @@ func get_badge(badge_name : String, channel_id : String = "_global", scale : Str
 				return get_badge(badge_name, "_global", scale)
 		texture.take_over_path(filename)
 		caches[RequestType.BADGE][channel_id][cachename] = texture
-	elif channel_id != "_global":
-		return get_badge(badge_name, "_global", scale)
 	return caches[RequestType.BADGE][channel_id][cachename]
 
 func get_emote(emote_id : String, scale = "1.0") -> ImageTexture:
