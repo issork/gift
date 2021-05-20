@@ -28,10 +28,10 @@ signal emote_downloaded(emote_id)
 # Badge has been downloaded
 signal badge_downloaded(badge_name)
 
-# Messages starting with one of these symbols are handled. '/' will be ignored, reserved by Twitch.
+# Messages starting with one of these symbols are handled as commands. '/' will be ignored, reserved by Twitch.
 export(Array, String) var command_prefixes : Array = ["!"]
-# Time to wait after each sent chat message. Values below ~0.31 might lead to a disconnect after 100 messages.
-export(float) var chat_timeout = 0.32
+# Time to wait in msec after each sent chat message. Values below ~310 might lead to a disconnect after 100 messages.
+export(int) var chat_timeout_ms = 320
 export(bool) var get_images : bool = false
 # If true, caches emotes/badges to disk, so that they don't have to be redownloaded on every restart.
 # This however means that they might not be updated if they change until you clear the cache.
@@ -39,12 +39,12 @@ export(bool) var disk_cache : bool = false
 # Disk Cache has to be enbaled for this to work
 export(String, FILE) var disk_cache_path = "user://gift/cache"
 
-var websocket : WebSocketClient = WebSocketClient.new()
-var user_regex = RegEx.new()
+var websocket := WebSocketClient.new()
+var user_regex := RegEx.new()
 var twitch_restarting
 # Twitch disconnects connected clients if too many chat messages are being sent. (At about 100 messages/30s)
 var chat_queue = []
-onready var chat_accu = chat_timeout
+var last_msg = OS.get_ticks_msec()
 # Mapping of channels to their channel info, like available badges.
 var channels : Dictionary = {}
 var commands : Dictionary = {}
@@ -81,7 +81,7 @@ func _ready() -> void:
 	websocket.connect("connection_error", self, "connection_error")
 	if(get_images):
 		image_cache = ImageCache.new(disk_cache, disk_cache_path)
-		add_child(image_cache)
+#		add_child(image_cache)
 
 func connect_to_twitch() -> void:
 	if(websocket.connect_to_url("wss://irc-ws.chat.twitch.tv:443") != OK):
@@ -91,11 +91,9 @@ func connect_to_twitch() -> void:
 func _process(delta : float) -> void:
 	if(websocket.get_connection_status() != NetworkedMultiplayerPeer.CONNECTION_DISCONNECTED):
 		websocket.poll()
-		if(!chat_queue.empty() && chat_accu >= chat_timeout):
+		if (!chat_queue.empty() && (last_msg + chat_timeout_ms) <= OS.get_ticks_msec()):
 			send(chat_queue.pop_front())
-			chat_accu = 0
-		else:
-			chat_accu += delta
+			last_msg = OS.get_ticks_msec()
 
 # Login using a oauth token.
 # You will have to either get a oauth token yourself or use
@@ -129,7 +127,7 @@ func chat(message : String, channel : String = ""):
 	else:
 		print_debug("No channel specified.")
 
-func whisper(message : String, target : String):
+func whisper(message : String, target : String) -> void:
 	chat("/w " + target + " " + message)
 
 func data_received() -> void:
@@ -194,13 +192,6 @@ func handle_message(message : String, tags : Dictionary) -> void:
 			var sender_data : SenderData = SenderData.new(user_regex.search(msg[0]).get_string(), msg[2], tags)
 			handle_command(sender_data, msg)
 			emit_signal("chat_message", sender_data, msg[3].right(1))
-			if(get_images):
-				if(!image_cache.badge_map.has(tags["room-id"])):
-					image_cache.get_badge_mappings(tags["room-id"])
-				for emote in tags["emotes"].split("/", false):
-					image_cache.get_emote(emote.split(":")[0])
-				for badge in tags["badges"].split(",", false):
-					image_cache.get_badge(badge, tags["room-id"])
 		"WHISPER":
 			var sender_data : SenderData = SenderData.new(user_regex.search(msg[0]).get_string(), msg[2], tags)
 			handle_command(sender_data, msg, true)
