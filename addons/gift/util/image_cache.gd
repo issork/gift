@@ -187,7 +187,7 @@ class Entry extends Reference:
 	var type : int
 	var filename : String
 	var data : Array
-	
+
 	func _init(path : String, type : int, filename : String, data : Array):
 		self.path = path
 		self.type = type
