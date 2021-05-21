@@ -208,7 +208,7 @@ func handle_command(sender_data : SenderData, msg : PoolStringArray, whisper : b
 			if(whisper == true && cmd_data.where & WhereFlag.WHISPER != WhereFlag.WHISPER):
 				return
 			elif(whisper == false && cmd_data.where & WhereFlag.CHAT != WhereFlag.CHAT):
-				return 
+				return
 			var args = "" if msg.size() < 5 else msg[4]
 			var arg_ary : PoolStringArray = PoolStringArray() if args == "" else args.split(" ")
 			if(arg_ary.size() > cmd_data.max_args && cmd_data.max_args != -1 || arg_ary.size() < cmd_data.min_args):

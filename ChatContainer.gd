@@ -30,7 +30,7 @@ class EmoteLocation extends Reference:
 	var id : String
 	var start : int
 	var end : int
-	
+
 	func _init(emote_id, start_idx, end_idx):
 		self.id = emote_id
 		self.start = start_idx
