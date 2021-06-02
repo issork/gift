@@ -189,11 +189,11 @@ func handle_message(message : String, tags : Dictionary) -> void:
 			emit_signal("login_attempt", true)
 		"PRIVMSG":
 			var sender_data : SenderData = SenderData.new(user_regex.search(msg[0]).get_string(), msg[2], tags)
-			handle_command(sender_data, msg)
+			handle_command(sender_data, msg[3].split(" ", true, 1))
 			emit_signal("chat_message", sender_data, msg[3].right(1))
 		"WHISPER":
 			var sender_data : SenderData = SenderData.new(user_regex.search(msg[0]).get_string(), msg[2], tags)
-			handle_command(sender_data, msg, true)
+			handle_command(sender_data, msg[3].split(" ", true, 1), true)
 			emit_signal("whisper_message", sender_data, msg[3].right(1))
 		"RECONNECT":
 			twitch_restarting = true
@@ -201,15 +201,15 @@ func handle_message(message : String, tags : Dictionary) -> void:
 			emit_signal("unhandled_message", message, tags)
 
 func handle_command(sender_data : SenderData, msg : PoolStringArray, whisper : bool = false) -> void:
-	if(command_prefixes.has(msg[3].substr(1, 1))):
-		var command : String  = msg[3].right(2)
+	if(command_prefixes.has(msg[0].substr(1, 1))):
+		var command : String  = msg[0].right(2)
 		var cmd_data : CommandData = commands.get(command)
 		if(cmd_data):
 			if(whisper == true && cmd_data.where & WhereFlag.WHISPER != WhereFlag.WHISPER):
 				return
 			elif(whisper == false && cmd_data.where & WhereFlag.CHAT != WhereFlag.CHAT):
 				return
-			var args = "" if msg.size() < 5 else msg[4]
+			var args = "" if msg.size() == 1 else msg[1]
 			var arg_ary : PoolStringArray = PoolStringArray() if args == "" else args.split(" ")
 			if(arg_ary.size() > cmd_data.max_args && cmd_data.max_args != -1 || arg_ary.size() < cmd_data.min_args):
 				emit_signal("cmd_invalid_argcount", command, sender_data, cmd_data, arg_ary)
