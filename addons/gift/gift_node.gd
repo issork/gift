@@ -217,7 +217,7 @@ func handle_command(sender_data : SenderData, msg : PoolStringArray, whisper : b
 				return
 			if(cmd_data.permission_level != 0):
 				var user_perm_flags = get_perm_flag_from_tags(sender_data.tags)
-				if(user_perm_flags & cmd_data.permission_level != cmd_data.permission_level):
+				if(user_perm_flags & cmd_data.permission_level >= 0):
 					emit_signal("cmd_no_permission", command, sender_data, cmd_data, arg_ary)
 					print_debug("No Permission for command!")
 					return
