@@ -71,7 +71,7 @@ func _ready() -> void:
 
 	# Send a chat message to the only connected channel (<channel_name>)
 	# Fails, if connected to more than one channel.
-#	gchat("TEST")
+#	chat("TEST")
 
 	# Send a chat message to channel <channel_name>
 #	chat("TEST", initial_channel)
