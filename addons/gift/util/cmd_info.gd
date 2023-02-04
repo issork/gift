@@ -1,4 +1,4 @@
-extends Reference
+extends RefCounted
 class_name CommandInfo
 
 var sender_data : SenderData

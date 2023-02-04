@@ -1,23 +1,16 @@
-[gd_scene load_steps=2 format=2]
+[gd_scene load_steps=2 format=3 uid="uid://g4ajgul65cwi"]
 
-[ext_resource path="res://ChatMessage.gd" type="Script" id=1]
+[ext_resource type="Script" path="res://ChatMessage.gd" id="1"]
 
 [node name="ChatMessage" type="HBoxContainer"]
-margin_right = 400.0
-margin_bottom = 24.0
 size_flags_horizontal = 3
-script = ExtResource( 1 )
-__meta__ = {
-"_edit_use_anchors_": false
-}
+script = ExtResource("1")
 
 [node name="RichTextLabel" type="RichTextLabel" parent="."]
-margin_right = 400.0
-margin_bottom = 24.0
-focus_mode = 2
+layout_mode = 2
 size_flags_horizontal = 3
-size_flags_vertical = 3
+focus_mode = 2
 bbcode_enabled = true
-fit_content_height = true
+fit_content = true
 scroll_active = false
 selection_enabled = true
