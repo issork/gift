@@ -6,52 +6,19 @@
 ;   [section] ; section goes between []
 ;   param=value ; assign values to parameters
 
-config_version=4
-
-_global_script_classes=[ {
-"base": "Reference",
-"class": "CommandData",
-"language": "GDScript",
-"path": "res://addons/gift/util/cmd_data.gd"
-}, {
-"base": "Reference",
-"class": "CommandInfo",
-"language": "GDScript",
-"path": "res://addons/gift/util/cmd_info.gd"
-}, {
-"base": "Node",
-"class": "Gift",
-"language": "GDScript",
-"path": "res://addons/gift/gift_node.gd"
-}, {
-"base": "Resource",
-"class": "ImageCache",
-"language": "GDScript",
-"path": "res://addons/gift/util/image_cache.gd"
-}, {
-"base": "Reference",
-"class": "SenderData",
-"language": "GDScript",
-"path": "res://addons/gift/util/sender_data.gd"
-} ]
-_global_script_class_icons={
-"CommandData": "",
-"CommandInfo": "",
-"Gift": "",
-"ImageCache": "",
-"SenderData": ""
-}
+config_version=5
 
 [application]
 
 config/name="GIFT"
 run/main_scene="res://Node.tscn"
+config/features=PackedStringArray("4.0")
 config/icon="res://icon.png"
 
 [debug]
 
-gdscript/warnings/unused_argument=false
 gdscript/warnings/return_value_discarded=false
+gdscript/warnings/unused_argument=false
 
 [display]
 
@@ -59,7 +26,7 @@ window/size/width=400
 
 [editor_plugins]
 
-enabled=PoolStringArray( "gift" )
+enabled=PackedStringArray("gift")
 
 [rendering]
 

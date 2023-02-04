@@ -3,10 +3,10 @@ Godot IRC For Twitch addon
 
 - [Examples](https://github.com/MennoMax/gift#Examples)
 - [API](https://github.com/MennoMax/gift#API)
-    - [Exported Variables](https://github.com/MennoMax/gift#Exported-Variables)
-    - [Signals](https://github.com/MennoMax/gift#Signals)
-    - [Functions](https://github.com/MennoMax/gift#Functions)
-    - [Utility Classes](https://github.com/MennoMax/gift#Utility-Classes)
+	- [Exported Variables](https://github.com/MennoMax/gift#Exported-Variables)
+	- [Signals](https://github.com/MennoMax/gift#Signals)
+	- [Functions](https://github.com/MennoMax/gift#Functions)
+	- [Utility Classes](https://github.com/MennoMax/gift#Utility-Classes)
 
 ***
 
@@ -31,8 +31,8 @@ func _ready() -> void:
   # to generate a token with custom scopes.
   authenticate_oauth(<account_name>, <oauth_token>)
   if(yield(self, "login_attempt") == false):
-    print("Invalid username or token.")
-    return
+	print("Invalid username or token.")
+	return
   join_channel(<channel_name>)
 
   # Adds a command with a specified permission flag.

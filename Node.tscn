@@ -1,90 +1,59 @@
-[gd_scene load_steps=6 format=2]
+[gd_scene load_steps=5 format=3 uid="uid://bculs28gstcxk"]
 
-[ext_resource path="res://Gift.gd" type="Script" id=1]
-[ext_resource path="res://addons/gift/icon.png" type="Texture" id=2]
-[ext_resource path="res://Button.gd" type="Script" id=3]
-[ext_resource path="res://ChatContainer.gd" type="Script" id=5]
-[ext_resource path="res://Node.gd" type="Script" id=6]
+[ext_resource type="Script" path="res://Gift.gd" id="1"]
+[ext_resource type="Script" path="res://Button.gd" id="3"]
+[ext_resource type="Script" path="res://LineEdit.gd" id="3_6ey00"]
+[ext_resource type="Script" path="res://ChatContainer.gd" id="5"]
 
 [node name="Node" type="Control"]
+layout_mode = 3
+anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-script = ExtResource( 6 )
-__meta__ = {
-"_edit_use_anchors_": false
-}
+grow_horizontal = 2
+grow_vertical = 2
 
 [node name="Gift" type="Node" parent="."]
-script = ExtResource( 1 )
-__meta__ = {
-"_editor_icon": ExtResource( 2 )
-}
-get_images = true
+script = ExtResource("1")
+command_prefixes = ["!"]
+disk_cache = true
 
 [node name="ChatContainer" type="VBoxContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
-script = ExtResource( 5 )
-__meta__ = {
-"_edit_use_anchors_": false
-}
+script = ExtResource("5")
 
 [node name="Chat" type="Panel" parent="ChatContainer"]
 show_behind_parent = true
-margin_right = 400.0
-margin_bottom = 572.0
+layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
-__meta__ = {
-"_edit_use_anchors_": false
-}
 
 [node name="ScrollContainer" type="ScrollContainer" parent="ChatContainer/Chat"]
+layout_mode = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
-margin_left = 10.0
-margin_top = 10.0
-margin_right = -10.0
-margin_bottom = -10.0
 follow_focus = true
-scroll_horizontal_enabled = false
-__meta__ = {
-"_edit_use_anchors_": false
-}
 
 [node name="ChatMessagesContainer" type="VBoxContainer" parent="ChatContainer/Chat/ScrollContainer"]
-margin_right = 380.0
-margin_bottom = 552.0
+layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
-custom_constants/separation = 6
-__meta__ = {
-"_edit_use_anchors_": false
-}
 
 [node name="HBoxContainer" type="HBoxContainer" parent="ChatContainer"]
-margin_top = 576.0
-margin_right = 400.0
-margin_bottom = 600.0
+layout_mode = 2
 
 [node name="LineEdit" type="LineEdit" parent="ChatContainer/HBoxContainer"]
-margin_right = 296.0
-margin_bottom = 24.0
+layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 caret_blink = true
-caret_blink_speed = 0.5
-__meta__ = {
-"_edit_use_anchors_": false
-}
+script = ExtResource("3_6ey00")
 
 [node name="Button" type="Button" parent="ChatContainer/HBoxContainer"]
-margin_left = 300.0
-margin_right = 400.0
-margin_bottom = 24.0
-rect_min_size = Vector2( 100, 0 )
+unique_name_in_owner = true
+layout_mode = 2
 text = "Send"
-script = ExtResource( 3 )
-__meta__ = {
-"_edit_use_anchors_": false
-}
+script = ExtResource("3")
