@@ -48,7 +48,7 @@ var last_msg : int = Time.get_ticks_msec()
 # Mapping of channels to their channel info, like available badges.
 var channels : Dictionary = {}
 # Last Userstate of the bot for channels. Contains <channel_name> -> <userstate_dictionary> entries.
-var last_userstate : Dictionary = {}
+var last_state : Dictionary = {}
 # Dictionary of commands, contains <command key> -> <Callable> entries.
 var commands : Dictionary = {}
 
@@ -166,10 +166,10 @@ func chat(message : String, channel : String = ""):
 		if (channel.begins_with("#")):
 			channel = channel.right(-1)
 		chat_queue.append("PRIVMSG #" + channel + " :" + message + "\r\n")
-		chat_message.emit(SenderData.new(last_userstate[channels.keys()[0]]["display-name"], channel, last_userstate[channels.keys()[0]]), message)
+		chat_message.emit(SenderData.new(last_state[channels.keys()[0]]["display-name"], channel, last_state[channels.keys()[0]]), message)
 	elif(keys.size() == 1):
 		chat_queue.append("PRIVMSG #" + channels.keys()[0] + " :" + message + "\r\n")
-		chat_message.emit(SenderData.new(last_userstate[channels.keys()[0]]["display-name"], channels.keys()[0], last_userstate[channels.keys()[0]]), message)
+		chat_message.emit(SenderData.new(last_state[channels.keys()[0]]["display-name"], channels.keys()[0], last_state[channels.keys()[0]]), message)
 	else:
 		print_debug("No channel specified.")
 
@@ -319,8 +319,13 @@ func handle_message(message : String, tags : Dictionary) -> void:
 			whisper_message.emit(sender_data, msg[3].right(-1))
 		"RECONNECT":
 			twitch_restarting = true
-		"USERSTATE":
-			last_userstate[msg[2].right(-1)] = tags
+		"USERSTATE", "ROOMSTATE":
+			var room = msg[2].right(-1)
+			if (!last_state.has(room)):
+				last_state[room] = tags
+			else:
+				for key in tags:
+					last_state[room][key] = tags[key]
 		_:
 			unhandled_message.emit(message, tags)
 

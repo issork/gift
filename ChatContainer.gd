@@ -8,11 +8,12 @@ func put_chat(senderdata : SenderData, msg : String):
 		var result = await($"../Gift".get_badge(badge, senderdata.tags["room-id"]))
 		badges += "[img=center]" + result.resource_path + "[/img] "
 	var locations : Array = []
-	for emote in senderdata.tags["emotes"].split("/", false):
-		var data : Array = emote.split(":")
-		for d in data[1].split(","):
-			var start_end = d.split("-")
-			locations.append(EmoteLocation.new(data[0], int(start_end[0]), int(start_end[1])))
+	if (senderdata.tags.has("emotes")):
+		for emote in senderdata.tags["emotes"].split("/", false):
+			var data : Array = emote.split(":")
+			for d in data[1].split(","):
+				var start_end = d.split("-")
+				locations.append(EmoteLocation.new(data[0], int(start_end[0]), int(start_end[1])))
 	locations.sort_custom(Callable(EmoteLocation, "smaller"))
 	var offset = 0
 	for loc in locations:
