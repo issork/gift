@@ -40,7 +40,7 @@ signal events_disconnected
 # The id has been received from the welcome message.
 signal events_id(id)
 # Twitch directed the bot to reconnect to a different URL
-signal events_reconnect(url)
+signal events_reconnect()
 # Twitch revoked a event subscription
 signal events_revoked(event, reason)
 
@@ -135,8 +135,11 @@ var commands : Dictionary = {}
 var eventsub : WebSocketPeer
 var eventsub_messages : Dictionary = {}
 var eventsub_connected : bool = false
+var eventsub_restarting : bool = false
+var eventsub_reconnect_url : String = ""
 var session_id : String = ""
-var next_keepalive : int = 0
+var keepalive_timeout : int = 0
+var last_keepalive : int = 0
 
 var websocket : WebSocketPeer
 var server : TCPServer = TCPServer.new()
@@ -144,7 +147,6 @@ var peer : StreamPeerTCP
 var connected : bool = false
 var user_regex : RegEx = RegEx.new()
 var twitch_restarting : bool = false
-var eventsub_restarting : bool = false
 
 enum RequestType {
 	EMOTE,
@@ -298,6 +300,12 @@ func refresh_token() -> void:
 		return
 	else:
 		refresh_token()
+	var to_remove : Array[String] = []
+	for entry in eventsub_messages.keys():
+		if (Time.get_ticks_msec() - eventsub_messages[entry] > 600000):
+			to_remove.append(entry)
+	for n in to_remove:
+		eventsub_messages.erase(n)
 
 func _process(delta : float) -> void:
 	if (websocket):
@@ -350,10 +358,10 @@ func _process(delta : float) -> void:
 					print_debug("Could not connect to EventSub.")
 					events_unavailable.emit()
 					eventsub = null
-				elif(events_reconnect):
+				elif(eventsub_restarting):
 					print_debug("Reconnecting to EventSub")
-					events_reconnect.emit()
-					connect_to_eventsub(await(events_reconnect))
+					eventsub.close()
+					connect_to_eventsub(eventsub_reconnect_url)
 					await(eventsub_connected)
 					eventsub_restarting = false
 				else:
@@ -366,20 +374,21 @@ func process_event(data : PackedByteArray) -> void:
 	var msg : Dictionary = JSON.parse_string(data.get_string_from_utf8())
 	if (eventsub_messages.has(msg["metadata"]["message_id"])):
 		return
-	eventsub_messages[msg["metadata"]["message_id"]] = msg["metadata"]["message_timestamp"]
+	eventsub_messages[msg["metadata"]["message_id"]] = Time.get_ticks_msec()
 	var payload : Dictionary = msg["payload"]
-	print(payload)
+	last_keepalive = Time.get_ticks_msec()
 	match msg["metadata"]["message_type"]:
 		"session_welcome":
 			session_id = payload["session"]["id"]
-			next_keepalive = Time.get_ticks_msec() + int(payload["session"]["keepalive_timeout_seconds"])
+			keepalive_timeout = payload["session"]["keepalive_timeout_seconds"]
 			events_id.emit(session_id)
 		"session_keepalive":
 			if (payload.has("session")):
-				next_keepalive = Time.get_ticks_msec() + int(payload["session"]["keepalive_timeout_seconds"])
+				keepalive_timeout = payload["session"]["keepalive_timeout_seconds"]
 		"session_reconnect":
 			eventsub_restarting = true
-			events_reconnect.emit(payload["session"]["reconnect_url"])
+			eventsub_reconnect_url = payload["session"]["reconnect_url"]
+			events_reconnect.emit()
 		"revocation":
 			events_revoked.emit(payload["subscription"]["type"], payload["subscription"]["status"])
 		"notification":
@@ -439,8 +448,9 @@ func connect_to_eventsub(url : String = "wss://eventsub-beta.wss.twitch.tv/ws") 
 		}
 		add_child(request)
 		request.request("https://api.twitch.tv/helix/eventsub/subscriptions", ["User-Agent: GIFT/3.0.0 (Godot Engine)", "Authorization: Bearer " + token["access_token"], "Client-Id:" + client_id, "Content-Type: application/json"], HTTPClient.METHOD_POST, JSON.stringify(data))
-		var response = await(request.request_completed)
-		print(response)
+		var reply : Array = await(request.request_completed)
+		var response : Dictionary = JSON.parse_string(reply[3].get_string_from_utf8())
+		print("Now listening to %s events for broadcaster_id %s." % [response["data"][0]["type"], response["data"][0]["condition"]["broadcaster_user_id"]])
 	events_connected.emit()
 
 # Request capabilities from twitch.
