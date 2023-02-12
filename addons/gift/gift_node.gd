@@ -1,15 +1,21 @@
 extends Node
 class_name Gift
 
-# The underlying websocket sucessfully connected to Twitch.
+# The underlying websocket sucessfully connected to Twitch IRC.
 signal twitch_connected
-# The connection has been closed. Not emitted if twitch announced a reconnect.
+# The connection has been closed. Not emitted if Twitch IRC announced a reconnect.
 signal twitch_disconnected
-# The connection to Twitch failed.
+# The connection to Twitch IRC failed.
 signal twitch_unavailable
-# Twitch requested the client to reconnect. (Will be unavailable until next connect)
+# Twitch IRC requested the client to reconnect. (Will be unavailable until next connect)
 signal twitch_reconnect
-# The client tried to login. Returns true if successful, else false.
+# User token from Twitch has been fetched.
+signal user_token_received(token_data)
+# User token is valid.
+signal user_token_valid
+# User token is no longer valid.
+signal user_token_invalid
+# The client tried to login to Twitch IRC. Returns true if successful, else false.
 signal login_attempt(success)
 # User sent a message in chat.
 signal chat_message(sender_data, message)
@@ -21,25 +27,99 @@ signal unhandled_message(message, tags)
 signal cmd_invalid_argcount(cmd_name, sender_data, cmd_data, arg_ary)
 # A command has been called with insufficient permissions
 signal cmd_no_permission(cmd_name, sender_data, cmd_data, arg_ary)
-# Twitch's ping is about to be answered with a pong.
+# Twitch IRC ping is about to be answered with a pong.
 signal pong
 
+
+# The underlying websocket sucessfully connected to Twitch EventSub.
+signal events_connected
+# The connection to Twitch EventSub failed.
+signal events_unavailable
+# The underlying websocket disconnected from Twitch EventSub.
+signal events_disconnected
+# The id has been received from the welcome message.
+signal events_id(id)
+# Twitch directed the bot to reconnect to a different URL
+signal events_reconnect(url)
+# Twitch revoked a event subscription
+signal events_revoked(event, reason)
+
+# Currently supported Twitch events. Refer to https://dev.twitch.tv/docs/eventsub/eventsub-subscription-types/ for details.
+#signal channel_update
+signal channel_follow(event_dict) # Beta, Twitch might change the API.
+signal channel_subscribe(event_dict)
+#signal channel_subscription_end
+signal channel_subscription_gift(event_dict)
+signal channel_subscription_message(event_dict)
+signal channel_cheer(event_dict)
+#signal channel_raid
+#signal channel_ban
+#signal channel_unban
+#signal channel_moderator_add
+#signal channel_moderator_remove
+#signal channel_points_custom_reward_add
+#signal channel_points_custom_reward_update
+#signal channel_points_custom_reward_remove
+signal channel_points_custom_reward_redemption_add(event_dict)
+signal channel_points_custom_reward_redemption_update(event_dict)
+#signal channel_poll_begin
+#signal channel_poll_progress
+#signal channel_poll_end
+#signal channel_prediction_begin
+#signal channel_prediction_progress
+#signal channel_prediction_lock
+#signal channel_prediction_end
+signal channel_charity_campaign_donate(event_dict)
+#signal channel_charity_campaign_start
+#signal channel_charity_campaign_progress
+#signal channel_charity_campaign_stop
+#signal drop_entitlement_grant
+signal extension_bits_transaction_create(event_dict)
+#signal channel_goal_begin
+#signal channel_goal_progress
+#signal channel_goal_end
+#signal channel_hype_train_begin
+#signal channel_hype_train_progress
+#signal channel_hype_train_end
+#signal channel_shield_mode_begin
+#signal channel_shield_mode_end
+#signal channel_shoutout_create
+#signal channel_shoutout_receive
+#signal stream_online
+#signal stream_offline
+#signal user_authorization_grant
+#signal user_authorization_revoke
+#signal user_update
+
+@export_category("IRC")
+
 ## Messages starting with one of these symbols are handled as commands. '/' will be ignored, reserved by Twitch.
-@export
-var command_prefixes : Array[String] = ["!"]
+@export var command_prefixes : Array[String] = ["!"]
 
 ## Time to wait in msec after each sent chat message. Values below ~310 might lead to a disconnect after 100 messages.
-@export
-var chat_timeout_ms : int = 320
+@export var chat_timeout_ms : int = 320
+
+## Scopes to request for the token. Look at https://dev.twitch.tv/docs/authentication/scopes/ for a list of all available scopes.
+@export var scopes : Array[String] = ["chat:edit", "chat:read"]
+
+@export_category("EventSub")
+## Events to subscribe to. Make sure you have requested the required scope. Full list available at https://dev.twitch.tv/docs/eventsub/eventsub-subscription-types/
+@export var events : Array[String] = []
+
+@export_category("Emotes/Badges")
 
 ## If true, caches emotes/badges to disk, so that they don't have to be redownloaded on every restart.
 ## This however means that they might not be updated if they change until you clear the cache.
-@export
-var disk_cache : bool = false
+@export var disk_cache : bool = false
 
 ## Disk Cache has to be enbaled for this to work
-@export_file
-var disk_cache_path : String = "user://gift/cache"
+@export_file var disk_cache_path : String = "user://gift/cache"
+
+var client_id : String = ""
+var client_secret : String = ""
+var username : String = ""
+var user_id : String = ""
+var token : Dictionary = {}
 
 # Twitch disconnects connected clients if too many chat messages are being sent. (At about 100 messages/30s).
 # This queue makes sure messages aren't sent too quickly.
@@ -52,10 +132,19 @@ var last_state : Dictionary = {}
 # Dictionary of commands, contains <command key> -> <Callable> entries.
 var commands : Dictionary = {}
 
-var websocket : WebSocketPeer = WebSocketPeer.new()
+var eventsub : WebSocketPeer
+var eventsub_messages : Dictionary = {}
+var eventsub_connected : bool = false
+var session_id : String = ""
+var next_keepalive : int = 0
+
+var websocket : WebSocketPeer
+var server : TCPServer = TCPServer.new()
+var peer : StreamPeerTCP
 var connected : bool = false
 var user_regex : RegEx = RegEx.new()
 var twitch_restarting : bool = false
+var eventsub_restarting : bool = false
 
 enum RequestType {
 	EMOTE,
@@ -68,8 +157,6 @@ var caches := {
 	RequestType.BADGE: {},
 	RequestType.BADGE_MAPPING: {}
 }
-
-#var image_cache : ImageCache
 
 # Required permission to execute the command
 enum PermissionFlag {
@@ -92,59 +179,269 @@ enum WhereFlag {
 
 func _init():
 	user_regex.compile("(?<=!)[\\w]*(?=@)")
-
-func _ready() -> void:
 	if (disk_cache):
 		for key in RequestType.keys():
 			if (!DirAccess.dir_exists_absolute(disk_cache_path + "/" + key)):
 				DirAccess.make_dir_recursive_absolute(disk_cache_path + "/" + key)
 
-func connect_to_twitch() -> void:
-	websocket.connect_to_url("wss://irc-ws.chat.twitch.tv:443")
-	set_process(true)
+# Authenticate to authorize GIFT to use your account to process events and messages.
+func authenticate(client_id, client_secret) -> void:
+	self.client_id = client_id
+	self.client_secret = client_secret
+	print("Checking token...")
+	if (FileAccess.file_exists("user://gift/auth/user_token")):
+		var file : FileAccess = FileAccess.open_encrypted_with_pass("user://gift/auth/user_token", FileAccess.READ, client_secret)
+		token = JSON.parse_string(file.get_as_text())
+		if (token.has("scope") && scopes.size() != 0):
+			if (scopes.size() != token["scope"].size()):
+				get_token()
+				token = await(user_token_received)
+			else:
+				for scope in scopes:
+					if (!token["scope"].has(scope)):
+						get_token()
+						token = await(user_token_received)
+		else:
+			get_token()
+			token = await(user_token_received)
+	else:
+		get_token()
+		token = await(user_token_received)
+	username = await(is_token_valid(token["access_token"]))
+	while (username == ""):
+		print("Token invalid.")
+		get_token()
+		token = await(user_token_received)
+		username = await(is_token_valid(token["access_token"]))
+	print("Token verified.")
+	user_token_valid.emit()
+	refresh_token()
+
+# Gets a new auth token from Twitch.
+func get_token() -> void:
+	print("Fetching new token.")
+	var scope = ""
+	for i in scopes.size() - 1:
+		scope += scopes[i]
+		scope += " "
+	if (scopes.size() > 0):
+		scope += scopes[scopes.size() - 1]
+	scope = scope.uri_encode()
+	OS.shell_open("https://id.twitch.tv/oauth2/authorize
+	?response_type=code
+	&client_id=" + client_id +
+	"&redirect_uri=http://localhost:18297
+	&scope=" + scope)
+	server.listen(18297)
+	print("Waiting for user to login.")
+	while(!peer):
+		peer = server.take_connection()
+		OS.delay_msec(100)
+	while(peer.get_status() == peer.STATUS_CONNECTED):
+		peer.poll()
+		if (peer.get_available_bytes() > 0):
+			var response = peer.get_utf8_string(peer.get_available_bytes())
+			var start : int = response.find("?")
+			response = response.substr(start + 1, response.find(" ", start) - start)
+			var data : Dictionary = {}
+			for entry in response.split("&"):
+				var pair = entry.split("=")
+				data[pair[0]] = pair[1]
+			if (data.has("error")):
+				var msg = "Error %s: %s" % [data["error"], data["error_description"]]
+				print(msg)
+				var response_code = 400
+				var body := msg.to_utf8_buffer()
+				peer.put_utf8_string("HTTP/1.1 %d\r\n" % response_code)
+				peer.put_utf8_string("Content-Length: %d\r\n\r\n" % body.size())
+				peer.put_data(body)
+				peer.disconnect_from_host()
+				break
+			else:
+				print("Success.")
+				var response_code = 200
+				var body := "Success!".to_utf8_buffer()
+				peer.put_utf8_string("HTTP/1.1 %d\r\n" % response_code)
+				peer.put_utf8_string("Content-Length: %d\r\n\r\n" % body.size())
+				peer.put_data(body)
+				peer.disconnect_from_host()
+				var request : HTTPRequest = HTTPRequest.new()
+				add_child(request)
+				request.request("https://id.twitch.tv/oauth2/token", ["User-Agent: GIFT/3.0.0 (Godot Engine)", "Content-Type: application/x-www-form-urlencoded"], HTTPClient.METHOD_POST, "client_id=" + client_id + "&client_secret=" + client_secret + "&code=" + data["code"] + "&grant_type=authorization_code&redirect_uri=http://localhost:18297")
+				var answer = await(request.request_completed)
+				if (!DirAccess.dir_exists_absolute("user://gift/auth")):
+					DirAccess.make_dir_recursive_absolute("user://gift/auth")
+				var file : FileAccess = FileAccess.open_encrypted_with_pass("user://gift/auth/user_token", FileAccess.WRITE, client_secret)
+				var token_data = answer[3].get_string_from_utf8()
+				file.store_string(token_data)
+				request.queue_free()
+				user_token_received.emit(JSON.parse_string(token_data))
+				break
+		OS.delay_msec(100)
+
+# If the token is valid, returns the username of the token bearer.
+func is_token_valid(token : String) -> String:
+	var request : HTTPRequest = HTTPRequest.new()
+	add_child(request)
+	request.request("https://id.twitch.tv/oauth2/validate", ["User-Agent: GIFT/3.0.0 (Godot Engine)", "Authorization: OAuth " + token])
+	var data = await(request.request_completed)
+	if (data[1] == 200):
+		var payload : Dictionary = JSON.parse_string(data[3].get_string_from_utf8())
+		user_id = payload["user_id"]
+		return payload["login"]
+	return ""
+
+func refresh_token() -> void:
+	await(get_tree().create_timer(3600))
+	if (await(is_token_valid(token["access_token"])) == ""):
+		user_token_invalid.emit()
+		return
+	else:
+		refresh_token()
 
 func _process(delta : float) -> void:
-	websocket.poll()
-	var state := websocket.get_ready_state()
-	match state:
-		WebSocketPeer.STATE_OPEN:
-			if (!connected):
-				twitch_connected.emit()
-				connected = true
-				print_debug("Connected to Twitch.")
-			while (websocket.get_available_packet_count()):
-				data_received(websocket.get_packet())
-			if (!chat_queue.is_empty() && (last_msg + chat_timeout_ms) <= Time.get_ticks_msec()):
-				send(chat_queue.pop_front())
-				last_msg = Time.get_ticks_msec()
-		WebSocketPeer.STATE_CLOSING:
-			pass
-		WebSocketPeer.STATE_CLOSED:
-			if (!connected):
-				twitch_unavailable.emit()
-				print_debug("Could not connect to Twitch.")
-			connected = false
-			if(twitch_restarting):
-				print_debug("Reconnecting to Twitch")
-				twitch_reconnect.emit()
-				connect_to_twitch()
-				await twitch_connected
-				for channel in channels.keys():
-					join_channel(channel)
-				twitch_restarting = false
-			else:
-				set_process(false)
-				print_debug("Disconnected from Twitch.")
-				twitch_disconnected.emit()
-			print_debug("Connection closed! [%s]: %s"%[websocket.get_close_code(), websocket.get_close_reason()])
+	if (websocket):
+		websocket.poll()
+		var state := websocket.get_ready_state()
+		match state:
+			WebSocketPeer.STATE_OPEN:
+				if (!connected):
+					twitch_connected.emit()
+					connected = true
+					print_debug("Connected to Twitch.")
+				else:
+					while (websocket.get_available_packet_count()):
+						data_received(websocket.get_packet())
+					if (!chat_queue.is_empty() && (last_msg + chat_timeout_ms) <= Time.get_ticks_msec()):
+						send(chat_queue.pop_front())
+						last_msg = Time.get_ticks_msec()
+			WebSocketPeer.STATE_CLOSED:
+				if (!connected):
+					twitch_unavailable.emit()
+					print_debug("Could not connect to Twitch.")
+					websocket = null
+				elif(twitch_restarting):
+					print_debug("Reconnecting to Twitch...")
+					twitch_reconnect.emit()
+					connect_to_irc()
+					await(twitch_connected)
+					for channel in channels.keys():
+						join_channel(channel)
+					twitch_restarting = false
+				else:
+					print_debug("Disconnected from Twitch.")
+					twitch_disconnected.emit()
+					connected = false
+					print_debug("Connection closed! [%s]: %s"%[websocket.get_close_code(), websocket.get_close_reason()])
+	if (eventsub):
+		eventsub.poll()
+		var state := eventsub.get_ready_state()
+		match state:
+			WebSocketPeer.STATE_OPEN:
+				if (!eventsub_connected):
+					events_connected.emit()
+					eventsub_connected = true
+					print_debug("Connected to EventSub.")
+				else:
+					while (eventsub.get_available_packet_count()):
+						process_event(eventsub.get_packet())
+			WebSocketPeer.STATE_CLOSED:
+				if(!eventsub_connected):
+					print_debug("Could not connect to EventSub.")
+					events_unavailable.emit()
+					eventsub = null
+				elif(events_reconnect):
+					print_debug("Reconnecting to EventSub")
+					events_reconnect.emit()
+					connect_to_eventsub(await(events_reconnect))
+					await(eventsub_connected)
+					eventsub_restarting = false
+				else:
+					print_debug("Disconnected from EventSub.")
+					events_disconnected.emit()
+					eventsub_connected = false
+					print_debug("Connection closed! [%s]: %s"%[websocket.get_close_code(), websocket.get_close_reason()])
 
-# Login using a oauth token.
-# You will have to either get a oauth token yourself or use
-# https://twitchapps.com/tokengen/
-# to generate a token with custom scopes.
-func authenticate_oauth(nick : String, token : String) -> void:
-	send("PASS " + ("" if token.begins_with("oauth:") else "oauth:") + token, true)
-	send("NICK " + nick.to_lower())
+func process_event(data : PackedByteArray) -> void:
+	var msg : Dictionary = JSON.parse_string(data.get_string_from_utf8())
+	if (eventsub_messages.has(msg["metadata"]["message_id"])):
+		return
+	eventsub_messages[msg["metadata"]["message_id"]] = msg["metadata"]["message_timestamp"]
+	var payload : Dictionary = msg["payload"]
+	print(payload)
+	match msg["metadata"]["message_type"]:
+		"session_welcome":
+			session_id = payload["session"]["id"]
+			next_keepalive = Time.get_ticks_msec() + int(payload["session"]["keepalive_timeout_seconds"])
+			events_id.emit(session_id)
+		"session_keepalive":
+			if (payload.has("session")):
+				next_keepalive = Time.get_ticks_msec() + int(payload["session"]["keepalive_timeout_seconds"])
+		"session_reconnect":
+			eventsub_restarting = true
+			events_reconnect.emit(payload["session"]["reconnect_url"])
+		"revocation":
+			events_revoked.emit(payload["subscription"]["type"], payload["subscription"]["status"])
+		"notification":
+			var event : Dictionary = payload["event"]
+			match payload["subscription"]["type"]:
+				"channel.follow":
+					channel_follow.emit(event)
+				"channel.subscribe":
+					channel_subscribe.emit(event)
+				"channel.subscription.gift":
+					channel_subscription_gift.emit(event)
+				"channel.subscription.message":
+					channel_subscription_message.emit(event)
+				"channel.cheer":
+					channel_cheer.emit(event)
+				"channel.charity_campaign.donate":
+					channel_charity_campaign_donate.emit(event)
+				"channel.channel_points_custom_reward_redemption.add":
+					channel_points_custom_reward_redemption_add.emit(event)
+				"channel.channel_points_custom_reward_redemption.update":
+					channel_points_custom_reward_redemption_update.emit(event)
+				"extensions.bits.transaction.create":
+					extension_bits_transaction_create.emit(event)
+
+# Connect to Twitch IRC. Make sure to authenticate first.
+func connect_to_irc() -> bool:
+	websocket = WebSocketPeer.new()
+	websocket.connect_to_url("wss://irc-ws.chat.twitch.tv:443")
+	print("Connecting to Twitch IRC.")
+	await(twitch_connected)
+	send("PASS oauth:%s" % [token["access_token"]], true)
+	send("NICK " + username.to_lower())
+	var success = await(login_attempt)
+	if (success):
+		connected = true
+	return success
+
+func connect_to_eventsub(url : String = "wss://eventsub-beta.wss.twitch.tv/ws") -> void:
+	eventsub = WebSocketPeer.new()
+	eventsub.connect_to_url(url)
+	print("Connecting to Twitch EventSub.")
+	await(events_id)
+	for event in events:
+		var request : HTTPRequest = HTTPRequest.new()
+		var version
+		if (event == "channel_follow"):
+			version = "beta"
+		else:
+			version = "1"
+		var data : Dictionary = {}
+		data["type"] = event
+		data["version"] = version
+		data["condition"] = {"broadcaster_user_id":user_id}
+		data["transport"] = {
+			"method":"websocket",
+			"session_id":session_id
+		}
+		add_child(request)
+		request.request("https://api.twitch.tv/helix/eventsub/subscriptions", ["User-Agent: GIFT/3.0.0 (Godot Engine)", "Authorization: Bearer " + token["access_token"], "Client-Id:" + client_id, "Content-Type: application/json"], HTTPClient.METHOD_POST, JSON.stringify(data))
+		var response = await(request.request_completed)
+		print(response)
+	events_connected.emit()
 
 # Request capabilities from twitch.
 func request_caps(caps : String = "twitch.tv/commands twitch.tv/tags twitch.tv/membership") -> void:
@@ -176,8 +473,8 @@ func chat(message : String, channel : String = ""):
 func whisper(message : String, target : String) -> void:
 	chat("/w " + target + " " + message)
 
-func get_emote(emote_id : String, scale : String = "1.0") -> Texture:
-	var texture : Texture
+func get_emote(emote_id : String, scale : String = "1.0") -> Texture2D:
+	var texture : Texture2D
 	var cachename : String = emote_id + "_" + scale
 	var filename : String = disk_cache_path + "/" + RequestType.keys()[RequestType.EMOTE] + "/" + cachename + ".png"
 	if !caches[RequestType.EMOTE].has(cachename):
@@ -196,12 +493,15 @@ func get_emote(emote_id : String, scale : String = "1.0") -> Texture:
 			img.load_png_from_buffer(data[3])
 			texture = ImageTexture.create_from_image(img)
 			texture.take_over_path(filename)
+			if (disk_cache):
+				DirAccess.make_dir_recursive_absolute(filename.get_base_dir())
+				texture.get_image().save_png(filename)
 		caches[RequestType.EMOTE][cachename] = texture
 	return caches[RequestType.EMOTE][cachename]
 
-func get_badge(badge_name : String, channel_id : String = "_global", scale : String = "1") -> Texture:
+func get_badge(badge_name : String, channel_id : String = "_global", scale : String = "1") -> Texture2D:
 	var badge_data : PackedStringArray = badge_name.split("/", true, 1)
-	var texture : Texture
+	var texture : Texture2D
 	var cachename = badge_data[0] + "_" + badge_data[1] + "_" + scale
 	var filename : String = disk_cache_path + "/" + RequestType.keys()[RequestType.BADGE] + "/" + channel_id + "/" + cachename + ".png"
 	if (!caches[RequestType.BADGE].has(channel_id)):
@@ -229,6 +529,9 @@ func get_badge(badge_name : String, channel_id : String = "_global", scale : Str
 					return await(get_badge(badge_name, "_global", scale))
 			elif (channel_id != "_global"):
 				return await(get_badge(badge_name, "_global", scale))
+			if (disk_cache):
+				DirAccess.make_dir_recursive_absolute(filename.get_base_dir())
+				texture.get_image().save_png(filename)
 		texture.take_over_path(filename)
 		caches[RequestType.BADGE][channel_id][cachename] = texture
 	return caches[RequestType.BADGE][channel_id][cachename]
@@ -248,13 +551,14 @@ func get_badge_mapping(channel_id : String = "_global") -> Dictionary:
 			if !buffer.is_empty():
 				caches[RequestType.BADGE_MAPPING][channel_id] = JSON.parse_string(buffer.get_string_from_utf8())["badge_sets"]
 				if (disk_cache):
+					DirAccess.make_dir_recursive_absolute(filename.get_base_dir())
 					var file : FileAccess = FileAccess.open(filename, FileAccess.WRITE)
 					file.store_buffer(buffer)
 			else:
 				return {}
 	return caches[RequestType.BADGE_MAPPING][channel_id]
 
-func data_received(data) -> void:
+func data_received(data : PackedByteArray) -> void:
 	var messages : PackedStringArray = data.get_string_from_utf8().strip_edges(false).split("\r\n")
 	var tags = {}
 	for message in messages:
@@ -264,7 +568,7 @@ func data_received(data) -> void:
 			for tag in msg[0].split(";"):
 				var pair = tag.split("=")
 				tags[pair[0]] = pair[1]
-		if(OS.is_debug_build()):
+		if (OS.is_debug_build()):
 			print("> " + message)
 		handle_message(message, tags)
 
@@ -296,16 +600,23 @@ func add_aliases(cmd_name : String, aliases : PackedStringArray) -> void:
 		add_alias(cmd_name, alias)
 
 func handle_message(message : String, tags : Dictionary) -> void:
-	if(message == ":tmi.twitch.tv NOTICE * :Login authentication failed" || message == ":tmi.twitch.tv NOTICE * :Login unsuccessful"):
-		print_debug("Authentication failed.")
-		login_attempt.emit(false)
-		return
 	if(message == "PING :tmi.twitch.tv"):
 		send("PONG :tmi.twitch.tv")
 		pong.emit()
 		return
 	var msg : PackedStringArray = message.split(" ", true, 3)
 	match msg[1]:
+		"NOTICE":
+			var info : String = msg[3].right(-1)
+			if (info == "Login authentication failed" || info == "Login unsuccessful"):
+				print_debug("Authentication failed.")
+				login_attempt.emit(false)
+			elif (info == "You don't have permission to perform that action"):
+				print_debug("No permission. Check if access token is still valid. Aborting.")
+				user_token_invalid.emit()
+				set_process(false)
+			else:
+				unhandled_message.emit(message, tags)
 		"001":
 			print_debug("Authentication successful.")
 			login_attempt.emit(true)
