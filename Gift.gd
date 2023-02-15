@@ -75,8 +75,8 @@ func _ready() -> void:
 	# Send a whisper to target user
 #	whisper("TEST", initial_channel)
 
-func on_follow(data) -> void:
-	print(data)
+func on_follow(data : Dictionary) -> void:
+	print("%s followed your channel!" % data["user_name"])
 
 func on_chat(data : SenderData, msg : String) -> void:
 	%ChatContainer.put_chat(data, msg)

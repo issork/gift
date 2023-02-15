@@ -40,7 +40,7 @@ signal events_disconnected
 # The id has been received from the welcome message.
 signal events_id(id)
 # Twitch directed the bot to reconnect to a different URL
-signal events_reconnect()
+signal events_reconnect
 # Twitch revoked a event subscription
 signal events_revoked(event, reason)
 
@@ -426,6 +426,7 @@ func connect_to_irc() -> bool:
 		connected = true
 	return success
 
+# Connect to Twitch EventSub. Make sure to authenticate first.
 func connect_to_eventsub(url : String = "wss://eventsub-beta.wss.twitch.tv/ws") -> void:
 	eventsub = WebSocketPeer.new()
 	eventsub.connect_to_url(url)
