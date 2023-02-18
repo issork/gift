@@ -294,7 +294,7 @@ func is_token_valid(token : String) -> String:
 	return ""
 
 func refresh_token() -> void:
-	await(get_tree().create_timer(3600))
+	await(get_tree().create_timer(3600).timeout)
 	if (await(is_token_valid(token["access_token"])) == ""):
 		user_token_invalid.emit()
 		return
