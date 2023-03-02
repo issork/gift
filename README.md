@@ -1,7 +1,7 @@
 # GIFT
 Godot IRC For Twitch addon
 
-To use this plugin, you need to create a new application on dev.twitch.tv to get a client ID and a client secret. The redirect URL of your App has to be https://localhost:18297.
+To use this plugin, you need to create a new application on dev.twitch.tv to get a client ID and a client secret. The redirect URL of your App has to be http://localhost:18297.
 
 If you require help, feel free to join my >[Discord Server](https://discord.gg/28DQbuwMM2)< and ask your questions <3
 
