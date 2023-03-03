@@ -44,52 +44,8 @@ signal events_reconnect
 # Twitch revoked a event subscription
 signal events_revoked(event, reason)
 
-# Currently supported Twitch events. Refer to https://dev.twitch.tv/docs/eventsub/eventsub-subscription-types/ for details.
-#signal channel_update
-signal channel_follow(event_dict) # Beta, Twitch might change the API.
-signal channel_subscribe(event_dict)
-#signal channel_subscription_end
-signal channel_subscription_gift(event_dict)
-signal channel_subscription_message(event_dict)
-signal channel_cheer(event_dict)
-#signal channel_raid
-#signal channel_ban
-#signal channel_unban
-#signal channel_moderator_add
-#signal channel_moderator_remove
-#signal channel_points_custom_reward_add
-#signal channel_points_custom_reward_update
-#signal channel_points_custom_reward_remove
-signal channel_points_custom_reward_redemption_add(event_dict)
-signal channel_points_custom_reward_redemption_update(event_dict)
-#signal channel_poll_begin
-#signal channel_poll_progress
-#signal channel_poll_end
-#signal channel_prediction_begin
-#signal channel_prediction_progress
-#signal channel_prediction_lock
-#signal channel_prediction_end
-signal channel_charity_campaign_donate(event_dict)
-#signal channel_charity_campaign_start
-#signal channel_charity_campaign_progress
-#signal channel_charity_campaign_stop
-#signal drop_entitlement_grant
-signal extension_bits_transaction_create(event_dict)
-#signal channel_goal_begin
-#signal channel_goal_progress
-#signal channel_goal_end
-#signal channel_hype_train_begin
-#signal channel_hype_train_progress
-#signal channel_hype_train_end
-#signal channel_shield_mode_begin
-#signal channel_shield_mode_end
-#signal channel_shoutout_create
-#signal channel_shoutout_receive
-#signal stream_online
-#signal stream_offline
-#signal user_authorization_grant
-#signal user_authorization_revoke
-#signal user_update
+# Refer to https://dev.twitch.tv/docs/eventsub/eventsub-reference/ data contained in the data dictionary.
+signal event(type, data)
 
 @export_category("IRC")
 
@@ -101,10 +57,6 @@ signal extension_bits_transaction_create(event_dict)
 
 ## Scopes to request for the token. Look at https://dev.twitch.tv/docs/authentication/scopes/ for a list of all available scopes.
 @export var scopes : Array[String] = ["chat:edit", "chat:read"]
-
-@export_category("EventSub")
-## Events to subscribe to. Make sure you have requested the required scope. Full list available at https://dev.twitch.tv/docs/eventsub/eventsub-subscription-types/
-@export var events : Array[String] = []
 
 @export_category("Emotes/Badges")
 
@@ -147,6 +99,8 @@ var peer : StreamPeerTCP
 var connected : bool = false
 var user_regex : RegEx = RegEx.new()
 var twitch_restarting : bool = false
+
+const USER_AGENT = "User-Agent: GIFT/4.0.0 (Godot Engine)"
 
 enum RequestType {
 	EMOTE,
@@ -243,6 +197,9 @@ func get_token() -> void:
 		peer.poll()
 		if (peer.get_available_bytes() > 0):
 			var response = peer.get_utf8_string(peer.get_available_bytes())
+			if (response == ""):
+				print("Empty response. Check if your redirect URL is set to http://localhost:18297.")
+				return
 			var start : int = response.find("?")
 			response = response.substr(start + 1, response.find(" ", start) - start)
 			var data : Dictionary = {}
@@ -269,7 +226,7 @@ func get_token() -> void:
 				peer.disconnect_from_host()
 				var request : HTTPRequest = HTTPRequest.new()
 				add_child(request)
-				request.request("https://id.twitch.tv/oauth2/token", ["User-Agent: GIFT/3.0.0 (Godot Engine)", "Content-Type: application/x-www-form-urlencoded"], HTTPClient.METHOD_POST, "client_id=" + client_id + "&client_secret=" + client_secret + "&code=" + data["code"] + "&grant_type=authorization_code&redirect_uri=http://localhost:18297")
+				request.request("https://id.twitch.tv/oauth2/token", [USER_AGENT, "Content-Type: application/x-www-form-urlencoded"], HTTPClient.METHOD_POST, "client_id=" + client_id + "&client_secret=" + client_secret + "&code=" + data["code"] + "&grant_type=authorization_code&redirect_uri=http://localhost:18297")
 				var answer = await(request.request_completed)
 				if (!DirAccess.dir_exists_absolute("user://gift/auth")):
 					DirAccess.make_dir_recursive_absolute("user://gift/auth")
@@ -285,7 +242,7 @@ func get_token() -> void:
 func is_token_valid(token : String) -> String:
 	var request : HTTPRequest = HTTPRequest.new()
 	add_child(request)
-	request.request("https://id.twitch.tv/oauth2/validate", ["User-Agent: GIFT/3.0.0 (Godot Engine)", "Authorization: OAuth " + token])
+	request.request("https://id.twitch.tv/oauth2/validate", [USER_AGENT, "Authorization: OAuth " + token])
 	var data = await(request.request_completed)
 	if (data[1] == 200):
 		var payload : Dictionary = JSON.parse_string(data[3].get_string_from_utf8())
@@ -392,26 +349,8 @@ func process_event(data : PackedByteArray) -> void:
 		"revocation":
 			events_revoked.emit(payload["subscription"]["type"], payload["subscription"]["status"])
 		"notification":
-			var event : Dictionary = payload["event"]
-			match payload["subscription"]["type"]:
-				"channel.follow":
-					channel_follow.emit(event)
-				"channel.subscribe":
-					channel_subscribe.emit(event)
-				"channel.subscription.gift":
-					channel_subscription_gift.emit(event)
-				"channel.subscription.message":
-					channel_subscription_message.emit(event)
-				"channel.cheer":
-					channel_cheer.emit(event)
-				"channel.charity_campaign.donate":
-					channel_charity_campaign_donate.emit(event)
-				"channel.channel_points_custom_reward_redemption.add":
-					channel_points_custom_reward_redemption_add.emit(event)
-				"channel.channel_points_custom_reward_redemption.update":
-					channel_points_custom_reward_redemption_update.emit(event)
-				"extensions.bits.transaction.create":
-					extension_bits_transaction_create.emit(event)
+			var event_data : Dictionary = payload["event"]
+			event.emit(payload["subscription"]["type"], event_data)
 
 # Connect to Twitch IRC. Make sure to authenticate first.
 func connect_to_irc() -> bool:
@@ -432,27 +371,28 @@ func connect_to_eventsub(url : String = "wss://eventsub-beta.wss.twitch.tv/ws") 
 	eventsub.connect_to_url(url)
 	print("Connecting to Twitch EventSub.")
 	await(events_id)
-	for event in events:
-		var request : HTTPRequest = HTTPRequest.new()
-		var version
-		if (event == "channel_follow"):
-			version = "beta"
-		else:
-			version = "1"
-		var data : Dictionary = {}
-		data["type"] = event
-		data["version"] = version
-		data["condition"] = {"broadcaster_user_id":user_id}
-		data["transport"] = {
-			"method":"websocket",
-			"session_id":session_id
-		}
-		add_child(request)
-		request.request("https://api.twitch.tv/helix/eventsub/subscriptions", ["User-Agent: GIFT/3.0.0 (Godot Engine)", "Authorization: Bearer " + token["access_token"], "Client-Id:" + client_id, "Content-Type: application/json"], HTTPClient.METHOD_POST, JSON.stringify(data))
-		var reply : Array = await(request.request_completed)
-		var response : Dictionary = JSON.parse_string(reply[3].get_string_from_utf8())
-		print("Now listening to %s events for broadcaster_id %s." % [response["data"][0]["type"], response["data"][0]["condition"]["broadcaster_user_id"]])
 	events_connected.emit()
+
+# Refer to https://dev.twitch.tv/docs/eventsub/eventsub-subscription-types/ for details on
+# which API versions are available and which conditions are required.
+func subscribe_event(event_name : String, version : int, conditions : Dictionary) -> void:
+	var data : Dictionary = {}
+	data["type"] = event_name
+	data["version"] = str(version)
+	data["condition"] = conditions
+	data["transport"] = {
+		"method":"websocket",
+		"session_id":session_id
+	}
+	var request : HTTPRequest = HTTPRequest.new()
+	add_child(request)
+	request.request("https://api.twitch.tv/helix/eventsub/subscriptions", [USER_AGENT, "Authorization: Bearer " + token["access_token"], "Client-Id:" + client_id, "Content-Type: application/json"], HTTPClient.METHOD_POST, JSON.stringify(data))
+	var reply : Array = await(request.request_completed)
+	var response : Dictionary = JSON.parse_string(reply[3].get_string_from_utf8())
+	if (response.has("error")):
+		print("Subscription failed for event '%s'. Error %s (%s): %s" % [event_name, response["status"], response["error"], response["message"]])
+		return
+	print("Now listening to '%s' events." % event_name)
 
 # Request capabilities from twitch.
 func request_caps(caps : String = "twitch.tv/commands twitch.tv/tags twitch.tv/membership") -> void:

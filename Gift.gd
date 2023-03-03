@@ -3,7 +3,7 @@ extends Gift
 func _ready() -> void:
 	cmd_no_permission.connect(no_permission)
 	chat_message.connect(on_chat)
-	channel_follow.connect(on_follow)
+	event.connect(on_event)
 
 	# I use a file in the working directory to store auth data
 	# so that I don't accidentally push it to the repository.
@@ -24,8 +24,11 @@ func _ready() -> void:
 	if (success):
 		request_caps()
 		join_channel(initial_channel)
-	events.append("channel.follow")
 	await(connect_to_eventsub())
+	# Refer to https://dev.twitch.tv/docs/eventsub/eventsub-subscription-types/ for details on
+	# what events exist, which API versions are available and which conditions are required.
+	# Make sure your token has all required scopes for the event.
+	subscribe_event("channel.follow", 2, {"broadcaster_user_id": user_id, "moderator_user_id": user_id})
 
 	# Adds a command with a specified permission flag.
 	# All implementations must take at least one arg for the command info.
@@ -75,8 +78,10 @@ func _ready() -> void:
 	# Send a whisper to target user
 #	whisper("TEST", initial_channel)
 
-func on_follow(data : Dictionary) -> void:
-	print("%s followed your channel!" % data["user_name"])
+func on_event(type : String, data : Dictionary) -> void:
+	match(type):
+		"channel.follow":
+			print("%s followed your channel!" % data["user_name"])
 
 func on_chat(data : SenderData, msg : String) -> void:
 	%ChatContainer.put_chat(data, msg)
