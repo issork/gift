@@ -100,7 +100,7 @@ var connected : bool = false
 var user_regex : RegEx = RegEx.new()
 var twitch_restarting : bool = false
 
-const USER_AGENT = "User-Agent: GIFT/4.0.0 (Godot Engine)"
+const USER_AGENT = "User-Agent: GIFT/4.1.0 (Godot Engine)"
 
 enum RequestType {
 	EMOTE,
@@ -244,6 +244,7 @@ func is_token_valid(token : String) -> String:
 	add_child(request)
 	request.request("https://id.twitch.tv/oauth2/validate", [USER_AGENT, "Authorization: OAuth " + token])
 	var data = await(request.request_completed)
+	request.queue_free()
 	if (data[1] == 200):
 		var payload : Dictionary = JSON.parse_string(data[3].get_string_from_utf8())
 		user_id = payload["user_id"]
@@ -388,6 +389,7 @@ func subscribe_event(event_name : String, version : int, conditions : Dictionary
 	add_child(request)
 	request.request("https://api.twitch.tv/helix/eventsub/subscriptions", [USER_AGENT, "Authorization: Bearer " + token["access_token"], "Client-Id:" + client_id, "Content-Type: application/json"], HTTPClient.METHOD_POST, JSON.stringify(data))
 	var reply : Array = await(request.request_completed)
+	request.queue_free()
 	var response : Dictionary = JSON.parse_string(reply[3].get_string_from_utf8())
 	if (response.has("error")):
 		print("Subscription failed for event '%s'. Error %s (%s): %s" % [event_name, response["status"], response["error"], response["message"]])
@@ -422,7 +424,30 @@ func chat(message : String, channel : String = ""):
 		print_debug("No channel specified.")
 
 func whisper(message : String, target : String) -> void:
-	chat("/w " + target + " " + message)
+	var user_data : Dictionary = await(user_data_by_name(target))
+	whisper_by_uid(message, user_data["id"])
+
+func whisper_by_uid(message : String, target_id : String) -> void:
+	var request : HTTPRequest = HTTPRequest.new()
+	add_child(request)
+	request.request("https://api.twitch.tv/helix/whispers", [USER_AGENT, "Authorization: Bearer " + token["access_token"], "Client-Id:" + client_id, "Content-Type: application/json"], HTTPClient.METHOD_POST, JSON.stringify({"from_user_id": user_id, "to_user_id": target_id, "message": message}))
+	var reply : Array = await(request.request_completed)
+	if (reply[1] != HTTPClient.RESPONSE_NO_CONTENT):
+		print("Error sending the whisper: " + reply[3].get_string_from_utf8())
+	request.queue_free()
+
+# Returns the specified users data or an empty Dictionary if the request fails.
+func user_data_by_name(username : String) -> Dictionary:
+	var request : HTTPRequest = HTTPRequest.new()
+	add_child(request)
+	request.request("https://api.twitch.tv/helix/users", [USER_AGENT, "Authorization: Bearer " + token["access_token"], "Client-Id:" + client_id, "Content-Type: application/json"], HTTPClient.METHOD_GET)
+	var reply : Array = await(request.request_completed)
+	request.queue_free()
+	if (reply[1] != HTTPClient.RESPONSE_OK):
+		print("Error retrieving User data: " + reply[3].get_string_from_utf8())
+		return {}
+	else:
+		return JSON.parse_string(reply[3].get_string_from_utf8())["data"][0]
 
 func get_emote(emote_id : String, scale : String = "1.0") -> Texture2D:
 	var texture : Texture2D
@@ -437,7 +462,7 @@ func get_emote(emote_id : String, scale : String = "1.0") -> Texture2D:
 		else:
 			var request : HTTPRequest = HTTPRequest.new()
 			add_child(request)
-			request.request("https://static-cdn.jtvnw.net/emoticons/v1/" + emote_id + "/" + scale, ["User-Agent: GIFT/2.0.0 (Godot Engine)","Accept: */*"])
+			request.request("https://static-cdn.jtvnw.net/emoticons/v1/" + emote_id + "/" + scale, [USER_AGENT,"Accept: */*"])
 			var data = await(request.request_completed)
 			request.queue_free()
 			var img : Image = Image.new()
@@ -469,7 +494,7 @@ func get_badge(badge_name : String, channel_id : String = "_global", scale : Str
 				if(map.has(badge_data[0])):
 					var request : HTTPRequest = HTTPRequest.new()
 					add_child(request)
-					request.request(map[badge_data[0]]["versions"][badge_data[1]]["image_url_" + scale + "x"], ["User-Agent: GIFT/2.0.0 (Godot Engine)","Accept: */*"])
+					request.request(map[badge_data[0]]["versions"][badge_data[1]]["image_url_" + scale + "x"], [USER_AGENT,"Accept: */*"])
 					var data = await(request.request_completed)
 					var img : Image = Image.new()
 					img.load_png_from_buffer(data[3])
@@ -495,7 +520,7 @@ func get_badge_mapping(channel_id : String = "_global") -> Dictionary:
 		else:
 			var request : HTTPRequest = HTTPRequest.new()
 			add_child(request)
-			request.request("https://badges.twitch.tv/v1/badges/" + ("global" if channel_id == "_global" else "channels/" + channel_id) + "/display", ["User-Agent: GIFT/2.0.0 (Godot Engine)","Accept: */*"])
+			request.request("https://badges.twitch.tv/v1/badges/" + ("global" if channel_id == "_global" else "channels/" + channel_id) + "/display", ["USER_AGENT","Accept: */*"])
 			var data = await(request.request_completed)
 			request.queue_free()
 			var buffer : PackedByteArray = data[3]

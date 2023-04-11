@@ -15,7 +15,7 @@ grow_vertical = 2
 
 [node name="Gift" type="Node" parent="."]
 script = ExtResource("1")
-scopes = Array[String](["chat:edit", "chat:read", "moderator:read:followers"])
+scopes = Array[String](["chat:edit", "chat:read", "moderator:read:followers", "user:manage:whispers"])
 
 [node name="ChatContainer" type="VBoxContainer" parent="."]
 unique_name_in_owner = true

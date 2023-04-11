@@ -76,7 +76,7 @@ func _ready() -> void:
 #	chat("TEST", initial_channel)
 
 	# Send a whisper to target user
-#	whisper("TEST", initial_channel)
+	whisper("TEST", "issork")
 
 func on_event(type : String, data : Dictionary) -> void:
 	match(type):
