@@ -100,7 +100,7 @@ var connected : bool = false
 var user_regex : RegEx = RegEx.new()
 var twitch_restarting : bool = false
 
-const USER_AGENT = "User-Agent: GIFT/4.1.0 (Godot Engine)"
+const USER_AGENT = "User-Agent: GIFT/4.1.1 (Godot Engine)"
 
 enum RequestType {
 	EMOTE,
@@ -423,31 +423,40 @@ func chat(message : String, channel : String = ""):
 	else:
 		print_debug("No channel specified.")
 
-func whisper(message : String, target : String) -> void:
+# Send a whisper message to a user by username. Returns a empty dictionary on success. If it failed, "status" will be present in the Dictionary.
+func whisper(message : String, target : String) -> Dictionary:
 	var user_data : Dictionary = await(user_data_by_name(target))
-	whisper_by_uid(message, user_data["id"])
+	if (user_data.has("status")):
+		return user_data
+	var response : int = await(whisper_by_uid(message, user_data["id"]))
+	if (response != HTTPClient.RESPONSE_NO_CONTENT):
+		return {"status": response}
+	return {}
 
-func whisper_by_uid(message : String, target_id : String) -> void:
+# Send a whisper message to a user by UID. Returns the response code.
+func whisper_by_uid(message : String, target_id : String) -> int:
 	var request : HTTPRequest = HTTPRequest.new()
 	add_child(request)
 	request.request("https://api.twitch.tv/helix/whispers", [USER_AGENT, "Authorization: Bearer " + token["access_token"], "Client-Id:" + client_id, "Content-Type: application/json"], HTTPClient.METHOD_POST, JSON.stringify({"from_user_id": user_id, "to_user_id": target_id, "message": message}))
 	var reply : Array = await(request.request_completed)
+	request.queue_free()
 	if (reply[1] != HTTPClient.RESPONSE_NO_CONTENT):
 		print("Error sending the whisper: " + reply[3].get_string_from_utf8())
-	request.queue_free()
+	return reply[0]
 
-# Returns the specified users data or an empty Dictionary if the request fails.
+# Returns the response as Dictionary. If it failed, "error" will be present in the Dictionary.
 func user_data_by_name(username : String) -> Dictionary:
 	var request : HTTPRequest = HTTPRequest.new()
 	add_child(request)
-	request.request("https://api.twitch.tv/helix/users", [USER_AGENT, "Authorization: Bearer " + token["access_token"], "Client-Id:" + client_id, "Content-Type: application/json"], HTTPClient.METHOD_GET)
+	request.request("https://api.twitch.tv/helix/users?login=" + username, [USER_AGENT, "Authorization: Bearer " + token["access_token"], "Client-Id:" + client_id, "Content-Type: application/json"], HTTPClient.METHOD_GET)
 	var reply : Array = await(request.request_completed)
+	var response : Dictionary = JSON.parse_string(reply[3].get_string_from_utf8())
 	request.queue_free()
-	if (reply[1] != HTTPClient.RESPONSE_OK):
-		print("Error retrieving User data: " + reply[3].get_string_from_utf8())
-		return {}
+	if (response.has("error")):
+		print("Error fetching user data: " + reply[3].get_string_from_utf8())
+		return response
 	else:
-		return JSON.parse_string(reply[3].get_string_from_utf8())["data"][0]
+		return response["data"][0]
 
 func get_emote(emote_id : String, scale : String = "1.0") -> Texture2D:
 	var texture : Texture2D
