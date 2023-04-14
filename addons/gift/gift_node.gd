@@ -100,7 +100,7 @@ var connected : bool = false
 var user_regex : RegEx = RegEx.new()
 var twitch_restarting : bool = false
 
-const USER_AGENT = "User-Agent: GIFT/4.1.1 (Godot Engine)"
+const USER_AGENT : String = "User-Agent: GIFT/4.1.1 (Godot Engine)"
 
 enum RequestType {
 	EMOTE,
@@ -529,7 +529,7 @@ func get_badge_mapping(channel_id : String = "_global") -> Dictionary:
 		else:
 			var request : HTTPRequest = HTTPRequest.new()
 			add_child(request)
-			request.request("https://badges.twitch.tv/v1/badges/" + ("global" if channel_id == "_global" else "channels/" + channel_id) + "/display", ["USER_AGENT","Accept: */*"])
+			request.request("https://badges.twitch.tv/v1/badges/" + ("global" if channel_id == "_global" else "channels/" + channel_id) + "/display", [USER_AGENT,"Accept: */*"])
 			var data = await(request.request_completed)
 			request.queue_free()
 			var buffer : PackedByteArray = data[3]
