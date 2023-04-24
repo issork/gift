@@ -75,7 +75,7 @@ func _ready() -> void:
 	# Send a chat message to channel <channel_name>
 #	chat("TEST", initial_channel)
 
-	# Send a whisper to target user
+	# Send a whisper to target user (requires user:manage:whispers scope)
 #	whisper("TEST", initial_channel)
 
 func on_event(type : String, data : Dictionary) -> void:

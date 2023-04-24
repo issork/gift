@@ -205,24 +205,16 @@ func get_token() -> void:
 			var data : Dictionary = {}
 			for entry in response.split("&"):
 				var pair = entry.split("=")
-				data[pair[0]] = pair[1]
+				data[pair[0]] = pair[1] if pair.size() > 0 else ""
 			if (data.has("error")):
 				var msg = "Error %s: %s" % [data["error"], data["error_description"]]
 				print(msg)
-				var response_code = 400
-				var body := msg.to_utf8_buffer()
-				peer.put_utf8_string("HTTP/1.1 %d\r\n" % response_code)
-				peer.put_utf8_string("Content-Length: %d\r\n\r\n" % body.size())
-				peer.put_data(body)
+				send_response(peer, "400 BAD REQUEST",  msg.to_utf8_buffer())
 				peer.disconnect_from_host()
 				break
 			else:
 				print("Success.")
-				var response_code = 200
-				var body := "Success!".to_utf8_buffer()
-				peer.put_utf8_string("HTTP/1.1 %d\r\n" % response_code)
-				peer.put_utf8_string("Content-Length: %d\r\n\r\n" % body.size())
-				peer.put_data(body)
+				send_response(peer, "200 OK", "Success!".to_utf8_buffer())
 				peer.disconnect_from_host()
 				var request : HTTPRequest = HTTPRequest.new()
 				add_child(request)
@@ -237,6 +229,15 @@ func get_token() -> void:
 				user_token_received.emit(JSON.parse_string(token_data))
 				break
 		OS.delay_msec(100)
+
+func send_response(peer : StreamPeer, response : String, body : PackedByteArray) -> void:
+	peer.put_data(("HTTP/1.1 %s\r\n" % response).to_utf8_buffer())
+	peer.put_data("Server: GIFT (Godot Engine)\r\n".to_utf8_buffer())
+	peer.put_data(("Content-Length: %d\r\n"% body.size()).to_utf8_buffer())
+	peer.put_data("Connection: close\r\n".to_utf8_buffer())
+	peer.put_data("Content-Type: text/plain; charset=UTF-8\r\n".to_utf8_buffer())
+	peer.put_data("\r\n".to_utf8_buffer())
+	peer.put_data(body)
 
 # If the token is valid, returns the username of the token bearer.
 func is_token_valid(token : String) -> String:
