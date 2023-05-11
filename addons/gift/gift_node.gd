@@ -100,7 +100,7 @@ var connected : bool = false
 var user_regex : RegEx = RegEx.new()
 var twitch_restarting : bool = false
 
-const USER_AGENT : String = "User-Agent: GIFT/4.1.2 (Godot Engine)"
+const USER_AGENT : String = "User-Agent: GIFT/4.1.3 (Godot Engine)"
 
 enum RequestType {
 	EMOTE,
