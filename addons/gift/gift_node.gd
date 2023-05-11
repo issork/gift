@@ -368,7 +368,7 @@ func connect_to_irc() -> bool:
 	return success
 
 # Connect to Twitch EventSub. Make sure to authenticate first.
-func connect_to_eventsub(url : String = "wss://eventsub-beta.wss.twitch.tv/ws") -> void:
+func connect_to_eventsub(url : String = "wss://eventsub.wss.twitch.tv/ws") -> void:
 	eventsub = WebSocketPeer.new()
 	eventsub.connect_to_url(url)
 	print("Connecting to Twitch EventSub.")
