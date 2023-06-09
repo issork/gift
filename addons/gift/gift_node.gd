@@ -100,7 +100,7 @@ var connected : bool = false
 var user_regex : RegEx = RegEx.new()
 var twitch_restarting : bool = false
 
-const USER_AGENT : String = "User-Agent: GIFT/4.1.3 (Godot Engine)"
+const USER_AGENT : String = "User-Agent: GIFT/4.1.4 (Godot Engine)"
 
 enum RequestType {
 	EMOTE,
@@ -530,17 +530,24 @@ func get_badge_mapping(channel_id : String = "_global") -> Dictionary:
 		else:
 			var request : HTTPRequest = HTTPRequest.new()
 			add_child(request)
-			request.request("https://badges.twitch.tv/v1/badges/" + ("global" if channel_id == "_global" else "channels/" + channel_id) + "/display", [USER_AGENT,"Accept: */*"])
-			var data = await(request.request_completed)
+			request.request("https://api.twitch.tv/helix/chat/badges" + ("/global" if channel_id == "_global" else "?broadcaster_id=" + channel_id), [USER_AGENT, "Authorization: Bearer " + token["access_token"], "Client-Id:" + client_id, "Content-Type: application/json"], HTTPClient.METHOD_GET)
+			var reply : Array = await(request.request_completed)
+			var response : Dictionary = JSON.parse_string(reply[3].get_string_from_utf8())
+			var mappings : Dictionary = {}
+			for entry in response["data"]:
+				if (!mappings.has(entry["set_id"])):
+					mappings[entry["set_id"]] = {"versions": {}}
+				for version in entry["versions"]:
+					mappings[entry["set_id"]]["versions"][version["id"]] = version
 			request.queue_free()
-			var buffer : PackedByteArray = data[3]
-			if !buffer.is_empty():
-				caches[RequestType.BADGE_MAPPING][channel_id] = JSON.parse_string(buffer.get_string_from_utf8())["badge_sets"]
+			if (reply[1] == HTTPClient.RESPONSE_OK):
+				caches[RequestType.BADGE_MAPPING][channel_id] = mappings
 				if (disk_cache):
 					DirAccess.make_dir_recursive_absolute(filename.get_base_dir())
 					var file : FileAccess = FileAccess.open(filename, FileAccess.WRITE)
-					file.store_buffer(buffer)
+					file.store_string(JSON.stringify(mappings))
 			else:
+				print("Could not retrieve badge mapping for channel_id " + channel_id + ".")
 				return {}
 	return caches[RequestType.BADGE_MAPPING][channel_id]
 
