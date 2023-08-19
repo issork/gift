@@ -519,32 +519,36 @@ func get_badge(badge_name : String, channel_id : String = "_global", scale : Str
 	return caches[RequestType.BADGE][channel_id][cachename]
 
 func get_badge_mapping(channel_id : String = "_global") -> Dictionary:
-	if !caches[RequestType.BADGE_MAPPING].has(channel_id):
-		var filename : String = disk_cache_path + "/" + RequestType.keys()[RequestType.BADGE_MAPPING] + "/" + channel_id + ".json"
-		if (disk_cache && FileAccess.file_exists(filename)):
-			caches[RequestType.BADGE_MAPPING][channel_id] = JSON.parse_string(FileAccess.get_file_as_string(filename))["badge_sets"]
-		else:
-			var request : HTTPRequest = HTTPRequest.new()
-			add_child(request)
-			request.request("https://api.twitch.tv/helix/chat/badges" + ("/global" if channel_id == "_global" else "?broadcaster_id=" + channel_id), [USER_AGENT, "Authorization: Bearer " + token["access_token"], "Client-Id:" + client_id, "Content-Type: application/json"], HTTPClient.METHOD_GET)
-			var reply : Array = await(request.request_completed)
-			var response : Dictionary = JSON.parse_string(reply[3].get_string_from_utf8())
-			var mappings : Dictionary = {}
-			for entry in response["data"]:
-				if (!mappings.has(entry["set_id"])):
-					mappings[entry["set_id"]] = {"versions": {}}
-				for version in entry["versions"]:
-					mappings[entry["set_id"]]["versions"][version["id"]] = version
-			request.queue_free()
-			if (reply[1] == HTTPClient.RESPONSE_OK):
-				caches[RequestType.BADGE_MAPPING][channel_id] = mappings
-				if (disk_cache):
-					DirAccess.make_dir_recursive_absolute(filename.get_base_dir())
-					var file : FileAccess = FileAccess.open(filename, FileAccess.WRITE)
-					file.store_string(JSON.stringify(mappings))
-			else:
-				print("Could not retrieve badge mapping for channel_id " + channel_id + ".")
-				return {}
+	if caches[RequestType.BADGE_MAPPING].has(channel_id):
+		return caches[RequestType.BADGE_MAPPING][channel_id]
+
+	var filename : String = disk_cache_path + "/" + RequestType.keys()[RequestType.BADGE_MAPPING] + "/" + channel_id + ".json"
+	if (disk_cache && FileAccess.file_exists(filename)):
+		var cache = JSON.parse_string(FileAccess.get_file_as_string(filename))
+		if "badge_sets" in cache:
+			return cache["badge_sets"]
+
+	var request : HTTPRequest = HTTPRequest.new()
+	add_child(request)
+	request.request("https://api.twitch.tv/helix/chat/badges" + ("/global" if channel_id == "_global" else "?broadcaster_id=" + channel_id), [USER_AGENT, "Authorization: Bearer " + token["access_token"], "Client-Id:" + client_id, "Content-Type: application/json"], HTTPClient.METHOD_GET)
+	var reply : Array = await(request.request_completed)
+	var response : Dictionary = JSON.parse_string(reply[3].get_string_from_utf8())
+	var mappings : Dictionary = {}
+	for entry in response["data"]:
+		if (!mappings.has(entry["set_id"])):
+			mappings[entry["set_id"]] = {"versions": {}}
+		for version in entry["versions"]:
+			mappings[entry["set_id"]]["versions"][version["id"]] = version
+	request.queue_free()
+	if (reply[1] == HTTPClient.RESPONSE_OK):
+		caches[RequestType.BADGE_MAPPING][channel_id] = mappings
+		if (disk_cache):
+			DirAccess.make_dir_recursive_absolute(filename.get_base_dir())
+			var file : FileAccess = FileAccess.open(filename, FileAccess.WRITE)
+			file.store_string(JSON.stringify(mappings))
+	else:
+		print("Could not retrieve badge mapping for channel_id " + channel_id + ".")
+		return {}
 	return caches[RequestType.BADGE_MAPPING][channel_id]
 
 func data_received(data : PackedByteArray) -> void:
