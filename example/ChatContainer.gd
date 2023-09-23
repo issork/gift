@@ -1,7 +1,7 @@
 extends VBoxContainer
 
 func put_chat(senderdata : SenderData, msg : String):
-	var msgnode : Control = preload("res://ChatMessage.tscn").instantiate()
+	var msgnode : Control = preload("res://example/ChatMessage.tscn").instantiate()
 	var time = Time.get_time_dict_from_system()
 	var badges : String = ""
 	for badge in senderdata.tags["badges"].split(",", false):
