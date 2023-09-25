@@ -11,9 +11,9 @@ config_version=5
 [application]
 
 config/name="GIFT"
-run/main_scene="res://Node.tscn"
-config/features=PackedStringArray("4.0")
-config/icon="res://icon.png"
+run/main_scene="res://example/Example.tscn"
+config/features=PackedStringArray("4.1")
+config/icon="res://example/icon.png"
 
 [debug]
 
@@ -26,7 +26,7 @@ window/size/width=400
 
 [editor_plugins]
 
-enabled=PackedStringArray("gift")
+enabled=PackedStringArray("res://addons/gift/plugin.cfg")
 
 [rendering]
 

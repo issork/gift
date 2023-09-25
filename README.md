@@ -3,6 +3,8 @@ Godot IRC For Twitch addon
 
 To use this plugin, you need to create a new application on dev.twitch.tv to get a client ID and a client secret. The redirect URL of your App has to be http://localhost:18297.
 
+The example expects an `auth.txt` file in the example folder with 3 lines (client id, client secret, channel to join)
+
 If you require help, feel free to join my >[Discord Server](https://discord.gg/28DQbuwMM2)< and ask your questions <3
 
 - [Examples](https://github.com/MennoMax/gift#Examples)
@@ -20,7 +22,7 @@ Below is a working example of this plugin, which is included in this project. A 
 
 ### Examples
 
-The following code is also [included](https://github.com/MennoMax/gift/blob/master/Gift.gd) in this repository.
+The following code is also [included](https://github.com/MennoMax/gift/blob/master/example/Gift.gd) in this repository.
 ```gdscript
 extends Gift
 
