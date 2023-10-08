@@ -1,3 +1,6 @@
+# Example auth file
+auth.txt
+
 # Godot 4+ specific ignores
 .godot/
 
