@@ -5,7 +5,7 @@ func put_chat(senderdata : SenderData, msg : String):
 	var time = Time.get_time_dict_from_system()
 	var badges : String = ""
 	for badge in senderdata.tags["badges"].split(",", false):
-		var result = await($"../Gift".get_badge(badge, senderdata.tags["room-id"]))
+		var result = await(%Gift.get_badge(badge, senderdata.tags["room-id"]))
 		badges += "[img=center]" + result.resource_path + "[/img] "
 	var locations : Array = []
 	if (senderdata.tags.has("emotes")):
@@ -17,7 +17,7 @@ func put_chat(senderdata : SenderData, msg : String):
 	locations.sort_custom(Callable(EmoteLocation, "smaller"))
 	var offset = 0
 	for loc in locations:
-		var result = await($"../Gift".get_emote(loc.id))
+		var result = await(%Gift.get_emote(loc.id))
 		var emote_string = "[img=center]" + result.resource_path +"[/img]"
 		msg = msg.substr(0, loc.start + offset) + emote_string + msg.substr(loc.end + offset + 1)
 		offset += emote_string.length() + loc.start - loc.end - 1
