@@ -21,6 +21,8 @@ signal login_attempt(success)
 signal chat_message(sender_data, message)
 # User sent a whisper message.
 signal whisper_message(sender_data, message)
+# Initial channel data received
+signal channel_data_received(channel_name)
 # Unhandled data passed through
 signal unhandled_message(message, tags)
 # A command has been called with invalid arg count
@@ -627,6 +629,7 @@ func handle_message(message : String, tags : Dictionary) -> void:
 			var room = msg[2].right(-1)
 			if (!last_state.has(room)):
 				last_state[room] = tags
+				channel_data_received.emit(room)
 			else:
 				for key in tags:
 					last_state[room][key] = tags[key]

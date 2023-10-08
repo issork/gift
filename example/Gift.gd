@@ -24,7 +24,8 @@ func _ready() -> void:
 	if (success):
 		request_caps()
 		join_channel(initial_channel)
-	await(connect_to_eventsub())
+		await(channel_data_received)
+	await(connect_to_eventsub()) # Only required if you want to receive EventSub events.
 	# Refer to https://dev.twitch.tv/docs/eventsub/eventsub-subscription-types/ for details on
 	# what events exist, which API versions are available and which conditions are required.
 	# Make sure your token has all required scopes for the event.
