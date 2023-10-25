@@ -102,7 +102,7 @@ var connected : bool = false
 var user_regex : RegEx = RegEx.new()
 var twitch_restarting : bool = false
 
-const USER_AGENT : String = "User-Agent: GIFT/4.1.4 (Godot Engine)"
+const USER_AGENT : String = "User-Agent: GIFT/4.1.5 (Godot Engine)"
 
 enum RequestType {
 	EMOTE,
@@ -159,21 +159,39 @@ func authenticate(client_id, client_secret) -> void:
 					if (!token["scope"].has(scope)):
 						get_token()
 						token = await(user_token_received)
-		else:
-			get_token()
-			token = await(user_token_received)
 	else:
 		get_token()
 		token = await(user_token_received)
 	username = await(is_token_valid(token["access_token"]))
 	while (username == ""):
 		print("Token invalid.")
-		get_token()
+		var refresh : String = token.get("refresh_token", "")
+		if (refresh != ""):
+			refresh_access_token(refresh)
+		else:
+			get_token()
 		token = await(user_token_received)
 		username = await(is_token_valid(token["access_token"]))
 	print("Token verified.")
 	user_token_valid.emit()
 	refresh_token()
+
+func refresh_access_token(refresh : String) -> void:
+	print("Refreshing access token.")
+	var request : HTTPRequest = HTTPRequest.new()
+	add_child(request)
+	request.request("https://id.twitch.tv/oauth2/token", [USER_AGENT, "Content-Type: application/x-www-form-urlencoded"], HTTPClient.METHOD_POST, "grant_type=refresh_token&refresh_token=%s&client_id=%s&client_secret=%s" % [refresh.uri_encode(), client_id, client_secret])
+	var reply : Array = await(request.request_completed)
+	request.queue_free()
+	var response : Dictionary = JSON.parse_string(reply[3].get_string_from_utf8())
+	if (response.has("error")):
+		print("Refresh failed, requesting new token.")
+		get_token()
+	else:
+		token = response
+		var file : FileAccess = FileAccess.open_encrypted_with_pass("user://gift/auth/user_token", FileAccess.WRITE, client_secret)
+		file.store_string(reply[3].get_string_from_utf8())
+		user_token_received.emit(response)
 
 # Gets a new auth token from Twitch.
 func get_token() -> void:
@@ -237,7 +255,7 @@ func send_response(peer : StreamPeer, response : String, body : PackedByteArray)
 	peer.put_data("\r\n".to_utf8_buffer())
 	peer.put_data(body)
 
-# If the token is valid, returns the username of the token bearer.
+# If the token is valid, returns the username of the token bearer. Returns an empty String if the token was invalid.
 func is_token_valid(token : String) -> String:
 	var request : HTTPRequest = HTTPRequest.new()
 	add_child(request)
