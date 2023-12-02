@@ -1,5 +1,5 @@
-extends RefCounted
 class_name CommandData
+extends RefCounted
 
 var func_ref : Callable
 var permission_level : int
@@ -13,4 +13,3 @@ func _init(f_ref : Callable, perm_lvl : int, mx_args : int, mn_args : int, whr :
 	max_args = mx_args
 	min_args = mn_args
 	where = whr
-

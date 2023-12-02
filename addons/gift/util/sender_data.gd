@@ -1,5 +1,5 @@
-extends RefCounted
 class_name SenderData
+extends RefCounted
 
 var user : String
 var channel : String

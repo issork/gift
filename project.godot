@@ -11,9 +11,8 @@ config_version=5
 [application]
 
 config/name="GIFT"
-run/main_scene="res://example/Example.tscn"
+run/main_scene="res://Example.tscn"
 config/features=PackedStringArray("4.1")
-config/icon="res://example/icon.png"
 
 [debug]
 
