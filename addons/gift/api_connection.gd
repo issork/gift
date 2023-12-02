@@ -85,13 +85,13 @@ func get_users(names : Array[String], ids : Array[String]) -> Dictionary:
 	if (names.size() > 0):
 		params += "login=%s" % names.pop_back()
 		while(names.size() > 0):
-			params += "&login=" % names.pop_back()
+			params += "&login=%s" % names.pop_back()
 	if (params.length() > 1):
 		params += "&"
 	if (ids.size() > 0):
 		params += "id=%s" % names.pop_back()
 		while(ids.size() > 0):
-			params += "&id=" % ids.pop_back()
+			params += "&id=%s" % ids.pop_back()
 	var response = await(request(HTTPClient.METHOD_GET,"/helix/users/%s" % params, headers))
 	match (client.get_response_code()):
 		400:
