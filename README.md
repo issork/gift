@@ -7,7 +7,7 @@ If you require help, feel free to join my >[Discord Server](https://discord.gg/2
 
 Below is a working example of this plugin, which is included in this project. A replication of the twitch chat. Most information about the Twitch API can be found in the [official documentation](https://dev.twitch.tv/docs/).
 
-[Example.gd](https://github.com/issork/gift/blob/master/Example.gd)
+[Example.gd](https://github.com/issork/gift/blob/master/example/Example.gd)
 
 ![image](https://user-images.githubusercontent.com/12477395/119052327-b9fc9980-b9c4-11eb-8f45-a2a8f2d98977.png)
 
