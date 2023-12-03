@@ -26,7 +26,7 @@ func _process_response(response : String) -> void:
 		if (response == ""):
 			print("Empty response. Check if your redirect URL is set to %s." % redirect_url)
 			return
-		var start : int = response.find("?")
+		var start : int = response.substr(0, response.find("\n")).find("?")
 		if (start == -1):
 			send_response("200 OK", "<html><script>window.location = window.location.toString().replace('#','?');</script><head><title>Twitch Login</title></head></html>".to_utf8_buffer())
 		else:
