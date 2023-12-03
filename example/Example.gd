@@ -76,14 +76,14 @@ func _ready() -> void:
 
 	# This part of the example only works if GIFT is logged in to your broadcaster account.
 	# If you are, you can uncomment this to also try receiving follow events.
+	# Don't forget to also add the 'moderator:read:followers' scope to your token.
 #	eventsub = TwitchEventSubConnection.new(api)
-#	eventsub.connect_to_eventsub()
+#	await(eventsub.connect_to_eventsub())
 #	eventsub.event.connect(on_event)
 #	var user_ids : Dictionary = await(api.get_users_by_name([username]))
-#	print(user_ids)
 #	if (user_ids.has("data") && user_ids["data"].size() > 0):
 #		var user_id : String = user_ids["data"][0]["id"]
-#		eventsub.subscribe_event("channel.follow", 2, {"broadcaster_user_id": user_id, "moderator_user_id": user_id})
+#		eventsub.subscribe_event("channel.follow", "2", {"broadcaster_user_id": user_id, "moderator_user_id": user_id})
 
 func hello(cmd_info : CommandInfo) -> void:
 	irc.chat("Hello World!")

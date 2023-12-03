@@ -1,7 +1,7 @@
 class_name TwitchEventSubConnection
 extends RefCounted
 
-const TEN_MINUTES_MS : int = 600000
+const TEN_MINUTES_S : int = 600
 
 # The id has been received from the welcome message.
 signal session_id_received(id)
@@ -66,12 +66,21 @@ func poll() -> void:
 					connection_state = ConnectionState.DISCONNECTED
 					print("Connection closed! [%s]: %s"%[websocket.get_close_code(), websocket.get_close_reason()])
 					websocket = null
+		var t : int = Time.get_ticks_msec() / 1000 - TEN_MINUTES_S
+		if (last_cleanup < t):
+			last_cleanup = Time.get_ticks_msec() / 1000
+			var to_remove : Array = []
+			for msg in eventsub_messages:
+				if (eventsub_messages[msg] < Time.get_unix_time_from_system() - TEN_MINUTES_S):
+					to_remove.append(msg)
+			for e in to_remove:
+				eventsub_messages.erase(e)
 
 func process_event(data : PackedByteArray) -> void:
 	var msg : Dictionary = JSON.parse_string(data.get_string_from_utf8())
-	if (eventsub_messages.has(msg["metadata"]["message_id"]) || msg["metadata"]["message_timestamp"]):
+	if (eventsub_messages.has(msg["metadata"]["message_id"]) || Time.get_unix_time_from_datetime_string(msg["metadata"]["message_timestamp"]) < Time.get_unix_time_from_system() - TEN_MINUTES_S):
 		return
-	eventsub_messages[msg["metadata"]["message_id"]] = Time.get_ticks_msec()
+	eventsub_messages[msg["metadata"]["message_id"]] = Time.get_unix_time_from_datetime_string(msg["metadata"]["message_timestamp"])
 	var payload : Dictionary = msg["payload"]
 	last_keepalive = Time.get_ticks_msec()
 	match msg["metadata"]["message_type"]:
@@ -93,10 +102,10 @@ func process_event(data : PackedByteArray) -> void:
 
 # Refer to https://dev.twitch.tv/docs/eventsub/eventsub-subscription-types/ for details on
 # which API versions are available and which conditions are required.
-func subscribe_event(event_name : String, version : int, conditions : Dictionary) -> void:
+func subscribe_event(event_name : String, version : String, conditions : Dictionary) -> void:
 	var data : Dictionary = {}
 	data["type"] = event_name
-	data["version"] = str(version)
+	data["version"] = version
 	data["condition"] = conditions
 	data["transport"] = {
 		"method":"websocket",
@@ -105,5 +114,7 @@ func subscribe_event(event_name : String, version : int, conditions : Dictionary
 	var response = await(api.create_eventsub_subscription(data))
 	if (response.has("error")):
 		print("Subscription failed for event '%s'. Error %s (%s): %s" % [event_name, response["status"], response["error"], response["message"]])
+		return
+	elif (response.is_empty()):
 		return
 	print("Now listening to '%s' events." % event_name)

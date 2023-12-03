@@ -23,7 +23,7 @@ func poll() -> void:
 		client_response.clear()
 
 func request(method : int, url : String, headers : PackedStringArray, body : String = "") -> Dictionary:
-	client.request(method, url, headers)
+	client.request(method, url, headers, body)
 	var response = await(received_response)
 	match (client.get_response_code()):
 		401:
