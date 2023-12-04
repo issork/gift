@@ -27,3 +27,36 @@ func send_response(response : String, body : PackedByteArray) -> void:
 	peer.put_data("Content-Type: text/html; charset=UTF-8\r\n".to_utf8_buffer())
 	peer.put_data("\r\n".to_utf8_buffer())
 	peer.put_data(body)
+
+func _process_response(response : String) -> void:
+	if (response == ""):
+		print("Empty response. Check if your redirect URL is set to %s." % redirect_url)
+		return
+	var start : int = response.substr(0, response.find("\n")).find("?")
+	if (start == -1):
+		_handle_empty_response()
+	else:
+		response = response.substr(start + 1, response.find(" ", start) - start)
+		var data : Dictionary = {}
+		for entry in response.split("&"):
+			var pair = entry.split("=")
+			data[pair[0]] = pair[1] if pair.size() > 0 else ""
+		if (data.has("error")):
+			_handle_error(data)
+		else:
+			_handle_success(data)
+	peer.disconnect_from_host()
+	peer = null
+
+func _handle_empty_response() -> void:
+	print ("Response from Twitch does not contain the required data.")
+
+func _handle_success(data : Dictionary) -> void:
+	data["scope"] = data["scope"].uri_decode().split(" ")
+	print("Success.")
+	send_response("200 OK", "<html><head><title>Twitch Login</title></head><body>Success!</body></html>".to_utf8_buffer())
+
+func _handle_error(data : Dictionary) -> void:
+	var msg = "Error %s: %s" % [data["error"], data["error_description"]]
+	print(msg)
+	send_response("400 BAD REQUEST",  msg.to_utf8_buffer())

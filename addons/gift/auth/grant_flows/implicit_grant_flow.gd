@@ -8,7 +8,7 @@ func login(client_id : String, scopes : PackedStringArray, force_verify : bool =
 	print("Waiting for user to login.")
 	var token_data : Dictionary = await(token_received)
 	server.stop()
-	if (token_data != null):
+	if (!token_data.is_empty()):
 		var token : UserAccessToken = UserAccessToken.new(token_data, client_id)
 		token.fresh = true
 		return token
@@ -22,27 +22,13 @@ func poll() -> void:
 	elif (peer.get_status() == StreamPeerTCP.STATUS_CONNECTED):
 		_poll_peer()
 
-func _process_response(response : String) -> void:
-		if (response == ""):
-			print("Empty response. Check if your redirect URL is set to %s." % redirect_url)
-			return
-		var start : int = response.substr(0, response.find("\n")).find("?")
-		if (start == -1):
-			send_response("200 OK", "<html><script>window.location = window.location.toString().replace('#','?');</script><head><title>Twitch Login</title></head></html>".to_utf8_buffer())
-		else:
-			response = response.substr(start + 1, response.find(" ", start) - start)
-			var data : Dictionary = {}
-			for entry in response.split("&"):
-				var pair = entry.split("=")
-				data[pair[0]] = pair[1] if pair.size() > 0 else ""
-			if (data.has("error")):
-				var msg = "Error %s: %s" % [data["error"], data["error_description"]]
-				print(msg)
-				send_response("400 BAD REQUEST",  msg.to_utf8_buffer())
-			else:
-				data["scope"] = data["scope"].uri_decode().split(" ")
-				print("Success.")
-				send_response("200 OK", "<html><head><title>Twitch Login</title></head><body>Success!</body></html>".to_utf8_buffer())
-			token_received.emit(data)
-		peer.disconnect_from_host()
-		peer = null
+func _handle_empty_response() -> void:
+	send_response("200 OK", "<html><script>window.location = window.location.toString().replace('#','?');</script><head><title>Twitch Login</title></head></html>".to_utf8_buffer())
+
+func _handle_success(data : Dictionary) -> void:
+	super._handle_success(data)
+	token_received.emit(data)
+
+func _handle_error(data : Dictionary) -> void:
+	super._handle_error(data)
+	token_received.emit({})

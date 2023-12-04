@@ -32,26 +32,14 @@ func poll() -> void:
 	if (server != null):
 		super.poll()
 
-func _process_response(response : String) -> void:
-	if (response == ""):
-		print("Empty response. Check if your redirect URL is set to %s." % redirect_url)
-		return
-	var start : int = response.find("?")
-	if (start == -1):
-		print ("Response from Twitch does not contain the required data.")
-	else:
-		response = response.substr(start + 1, response.find(" ", start) - start)
-		var data : Dictionary = {}
-		for entry in response.split("&"):
-			var pair = entry.split("=")
-			data[pair[0]] = pair[1] if pair.size() > 0 else ""
-		if (data.has("error")):
-			var msg = "Error %s: %s" % [data["error"], data["error_description"]]
-			print(msg)
-			send_response("400 BAD REQUEST",  msg.to_utf8_buffer())
-		else:
-			print("Success.")
-			send_response("200 OK", "<html><head><title>Twitch Login</title></head><body>Success!</body></html>".to_utf8_buffer())
-			auth_code_received.emit(data["code"])
-	peer.disconnect_from_host()
-	peer = null
+func _handle_empty_response() -> void:
+	super._handle_empty_response()
+	auth_code_received.emit("")
+
+func _handle_success(data : Dictionary) -> void:
+	super._handle_success(data)
+	auth_code_received.emit(data["code"])
+
+func _handle_error(data : Dictionary) -> void:
+	super._handle_error(data)
+	auth_code_received.emit("")
