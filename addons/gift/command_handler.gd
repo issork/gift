@@ -79,12 +79,13 @@ func handle_command(sender_data : SenderData, msg : String, whisper : bool = fal
 					if(user_perm_flags & cmd_data.permission_level == 0):
 						cmd_no_permission.emit(command, sender_data, cmd_data, arg_ary)
 						return
-				if(arg_ary.size() == 0):
-					cmd_data.func_ref.call(CommandInfo.new(sender_data, command, whisper))
-				else:
-					cmd_data.func_ref.call(CommandInfo.new(sender_data, command, whisper), arg_ary)
-			elif (cmd_data.min_args > 0):
-				cmd_invalid_argcount.emit(command, sender_data, cmd_data, arg_ary)
+			if(arg_ary.size() == 0):
+				if (cmd_data.min_args > 0):
+					cmd_invalid_argcount.emit(command, sender_data, cmd_data, arg_ary)
+					return
+				cmd_data.func_ref.call(CommandInfo.new(sender_data, command, whisper))
+			else:
+				cmd_data.func_ref.call(CommandInfo.new(sender_data, command, whisper), arg_ary)
 
 func get_perm_flag_from_tags(tags : Dictionary) -> int:
 	var flag = 0

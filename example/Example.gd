@@ -61,13 +61,13 @@ func _ready() -> void:
 	# Add a list command that accepts between 1 and infinite args.
 	cmd_handler.add_command("list", list, -1, 1)
 
-	# For the cmd handler to receive the messages, we have to forward them.
+	# For the chat example to work, we forward the messages received to the put_chat function.
+	irc.chat_message.connect(put_chat)
+
+	# We also have to forward the messages to the command handler to handle them.
 	irc.chat_message.connect(cmd_handler.handle_command)
 	# If you also want to accept whispers, connect the signal and bind true as the last arg.
 	irc.whisper_message.connect(cmd_handler.handle_command.bind(true))
-
-	# For the chat example to work, we forward the messages received to the put_chat function.
-	irc.chat_message.connect(put_chat)
 
 	# When we press enter on the chat bar or press the send button, we want to execute the send_message
 	# function.
