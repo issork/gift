@@ -107,19 +107,28 @@ func send_whisper(from_user_id : String, to_user_id : String, message : String) 
 		"Client-Id: %s" % id_conn.last_token.last_client_id,
 		"Content-Type: application/json"
 	]
-	var response = await(request(HTTPClient.METHOD_POST, "/helix/eventsub/whispers?from_user_id=%s&to_user_id=%s", headers, JSON.stringify({"message": message})))
-	match (client.get_response_code()):
-		204:
+	var params: String = "?"
+	params += "from_user_id=%s" % from_user_id
+	params += "&to_user_id=%s" % to_user_id
+	var response: Dictionary = await(
+		request(
+			HTTPClient.METHOD_POST,
+			"/helix/whispers" + params,
+			headers,
+			JSON.stringify({"message": message})
+		)
+	)
+	var response_code: int = client.get_response_code()
+	match (response_code):
+		# 200 is returned even if Twitch documentation says only 204
+		200, 204:
+			print("Success! The whisper was sent.")
 			return true
-		400:
-			print("Bad Request! Check the data you specified.")
+		# Complete list of error codes according to Twitch documentation
+		400, 401, 403, 404, 429:
+			print("[Error (send_whisper)] %s - %s" % [response["status"], response["message"]])
 			return false
-		403:
-			print("Forbidden! The account that's sending the message doesn't allow sending whispers.")
+		# Fallback for unknown response codes
+		_:
+			print("[Default (send_whisper)] %s " % response_code)
 			return false
-		404:
-			print("Not Found! The ID in to_user_id was not found.")
-		429:
-			print("Too Many Requests! The sending user exceeded the number of whisper requests that they may make.")
-			return false
-	return false
