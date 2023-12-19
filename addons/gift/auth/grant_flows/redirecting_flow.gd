@@ -54,7 +54,7 @@ func _handle_empty_response() -> void:
 func _handle_success(data : Dictionary) -> void:
 	data["scope"] = data["scope"].uri_decode().split(" ")
 	print("Success.")
-	send_response("200 OK", "<html><head><title>Twitch Login</title></head><body>Success!</body></html>".to_utf8_buffer())
+	send_response("200 OK", "<html><head><title>Twitch Login</title></head><body onload=\"javascript:close()\">Success!</body></html>".to_utf8_buffer())
 
 func _handle_error(data : Dictionary) -> void:
 	var msg = "Error %s: %s" % [data["error"], data["error_description"]]
