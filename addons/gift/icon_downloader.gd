@@ -23,7 +23,8 @@ func _init(twitch_api : TwitchAPIConnection, disk_cache_enabled : bool = false) 
 
 func poll() -> void:
 	jtvnw_client.poll()
-	if (jtvnw_client.get_status() == HTTPClient.STATUS_BODY):
+	var conn_status = jtvnw_client.get_status()
+	if (conn_status == HTTPClient.STATUS_BODY):
 		jtvnw_response += jtvnw_client.read_response_body_chunk()
 	elif (!jtvnw_response.is_empty()):
 		var img := Image.new()
@@ -34,8 +35,11 @@ func poll() -> void:
 		texture.set_image(img)
 		texture.take_over_path(path)
 		fetched.emit(texture)
-	elif (jtvnw_client.get_status() == HTTPClient.STATUS_CONNECTED && !jtvnw_queue.is_empty()):
-		jtvnw_client.request(HTTPClient.METHOD_GET, jtvnw_queue.front(), ["Accept: image/png"])
+	elif (!jtvnw_queue.is_empty()):
+		if (conn_status == HTTPClient.STATUS_CONNECTED):
+			jtvnw_client.request(HTTPClient.METHOD_GET, jtvnw_queue.front(), ["Accept: image/png"])
+		elif (conn_status == HTTPClient.STATUS_DISCONNECTED || conn_status == HTTPClient.STATUS_CONNECTION_ERROR):
+			jtvnw_client.connect_to_host(JTVNW_URL)
 
 func get_badge(badge_id : String, channel_id : String = "_global", scale : String = "1x") -> Texture2D:
 	var badge_data : PackedStringArray = badge_id.split("/", true, 1)
@@ -78,5 +82,5 @@ func wait_for_fetched(path : String, filepath : String) -> ImageTexture:
 		var last_fetched : ImageTexture = null
 		while (last_fetched == null || last_fetched.resource_path != path):
 			last_fetched = await(fetched)
-		last_fetched.take_over_path(filepath)
-		return load(filepath)
+		last_fetched.take_over_path(path)
+		return load(path)
