@@ -23,7 +23,7 @@ func _init(twitch_api : TwitchAPIConnection, disk_cache_enabled : bool = false) 
 
 func poll() -> void:
 	jtvnw_client.poll()
-	var conn_status = jtvnw_client.get_status()
+	var conn_status : HTTPClient.Status = jtvnw_client.get_status()
 	if (conn_status == HTTPClient.STATUS_BODY):
 		jtvnw_response += jtvnw_client.read_response_body_chunk()
 	elif (!jtvnw_response.is_empty()):
