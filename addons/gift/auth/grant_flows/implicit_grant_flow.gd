@@ -4,7 +4,7 @@ extends RedirectingFlow
 # Get an OAuth token from Twitch. Returns null if authentication failed.
 func login(client_id : String, scopes : PackedStringArray, force_verify : bool = false) -> UserAccessToken:
 	start_tcp_server()
-	OS.shell_open("https://id.twitch.tv/oauth2/authorize?response_type=token&client_id=%s&force_verify=%s&redirect_uri=%s&scope=%s" % [client_id, "true" if force_verify else "false", redirect_url, " ".join(scopes)].map(func (a : String): return a.uri_encode()))
+	_open_link("https://id.twitch.tv/oauth2/authorize?response_type=token&client_id=%s&force_verify=%s&redirect_uri=%s&scope=%s" % [client_id, "true" if force_verify else "false", redirect_url, " ".join(scopes)].map(func (a : String): return a.uri_encode()))
 	print("Waiting for user to login.")
 	var token_data : Dictionary = await(token_received)
 	server.stop()

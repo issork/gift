@@ -6,6 +6,8 @@ var server : TCPServer
 var tcp_port : int
 var redirect_url : String
 
+var open_link_callback : Callable
+
 func _init(port : int = 18297, redirect : String = "http://localhost:%s" % port) -> void:
 	tcp_port = port
 	redirect_url = redirect
@@ -60,3 +62,9 @@ func _handle_error(data : Dictionary) -> void:
 	var msg = "Error %s: %s" % [data["error"], data["error_description"]]
 	print(msg)
 	send_response("400 BAD REQUEST",  msg.to_utf8_buffer())
+
+func _open_link(url : String) -> void:
+	if (open_link_callback == null):
+		OS.shell_open(url)
+	else:
+		open_link_callback.call(url)
