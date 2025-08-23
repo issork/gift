@@ -15,7 +15,8 @@ var id_client_response : PackedByteArray = []
 
 var next_check : int = 0
 
-func _init(token : TwitchToken) -> void:
+func _init(token : TwitchToken, poll_signal : Signal = Engine.get_main_loop().process_frame) -> void:
+	poll_signal.connect(poll)
 	last_token = token
 	if (last_token.fresh):
 		next_check += ONE_HOUR_MS
@@ -53,7 +54,10 @@ func check_token() -> void:
 
 func refresh_token() -> void:
 	if (last_token is RefreshableUserAccessToken):
-		id_client.request(HTTPClient.METHOD_GET, "/oauth2/token", ["Content-Type: application/x-www-form-urlencoded"], "grant_type=refresh_token&refresh_token=%s&client_id=%s&client_secret=%s" % [last_token.refresh_token, last_token.last_client_id, last_token.last_client_secret])
+		if (last_token.last_client_secret != ""):
+			id_client.request(HTTPClient.METHOD_GET, "/oauth2/token", ["Content-Type: application/x-www-form-urlencoded"], "grant_type=refresh_token&refresh_token=%s&client_id=%s&client_secret=%s" % [last_token.refresh_token, last_token.last_client_id, last_token.last_client_secret])
+		else:
+			id_client.request(HTTPClient.METHOD_GET, "/oauth2/token", ["Content-Type: application/x-www-form-urlencoded"], "grant_type=refresh_token&refresh_token=%s&client_id=%s" % [last_token.refresh_token, last_token.last_client_id])
 	elif (last_token is UserAccessToken):
 		var auth : ImplicitGrantFlow = ImplicitGrantFlow.new()
 		polled.connect(auth.poll)

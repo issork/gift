@@ -5,6 +5,8 @@ const TEN_MINUTES_S : int = 600
 
 # The id has been received from the welcome message.
 signal session_id_received(id)
+signal connection_failed
+signal disconnected(close_code, reason)
 signal events_revoked(type, status)
 signal event(type, event_data)
 
@@ -55,6 +57,7 @@ func poll() -> void:
 			WebSocketPeer.STATE_CLOSED:
 				if(connection_state != ConnectionState.CONNECTED):
 					print("Could not connect to EventSub.")
+					connection_failed.emit()
 					websocket = null
 					connection_state = ConnectionState.CONNECTION_FAILED
 				elif(connection_state == ConnectionState.RECONNECTING):
@@ -65,6 +68,7 @@ func poll() -> void:
 					print("Disconnected from EventSub.")
 					connection_state = ConnectionState.DISCONNECTED
 					print("Connection closed! [%s]: %s"%[websocket.get_close_code(), websocket.get_close_reason()])
+					disconnected.emit(websocket.get_close_code(), websocket.get_close_reason())
 					websocket = null
 		var t : int = Time.get_ticks_msec() / 1000 - TEN_MINUTES_S
 		if (last_cleanup < t):

@@ -10,6 +10,7 @@ extends Control
 @export var channel : String
 # The username of the bot account.
 @export var username : String
+@export_global_file var token_path : String = "user://.gift/token"
 
 var id : TwitchIDConnection
 var api : TwitchAPIConnection
@@ -21,17 +22,23 @@ var cmd_handler : GIFTCommandHandler = GIFTCommandHandler.new()
 var iconloader : TwitchIconDownloader
 
 func _ready() -> void:
-	# We will login using the Implicit Grant Flow, which only requires a client_id.
-	# Alternatively, you can use the Authorization Code Grant Flow or the Client Credentials Grant Flow.
+	# We will login using the Device Grant Flow, which only requires a client_id.
+	# Alternatively, you can use the Authorization Code Grant Flow or the Implicit Grant Flow.
 	# Note that the Client Credentials Grant Flow will only return an AppAccessToken, which can not be used
 	# for the majority of the Twitch API or to join a chat room.
-	var auth : ImplicitGrantFlow = ImplicitGrantFlow.new()
-	# For the auth to work, we need to poll it regularly.
-	get_tree().process_frame.connect(auth.poll) # You can also use a timer if you don't want to poll on every frame.
-
-	# Next, we actually get our token to authenticate. We want to be able to read and write messages,
-	# so we request the required scopes. See https://dev.twitch.tv/docs/authentication/scopes/#twitch-access-token-scopes
-	var token : UserAccessToken = await(auth.login(client_id, ["chat:read", "chat:edit"]))
+	# We want to be able to read and write messages, so we request the required scopes.
+	# See https://dev.twitch.tv/docs/authentication/scopes/#twitch-access-token-scopes
+	var scopes : PackedStringArray = ["chat:read", "chat:edit", "moderator:read:followers"]
+	var token : UserAccessToken = TokenCache.load_token(token_path, scopes)
+	if (token == null):
+		var auth : DeviceCodeGrantFlow = DeviceCodeGrantFlow.new()
+		var response := await(auth.request_login(client_id, scopes))
+		print(response["verification_uri"])
+		token = await(auth.login(client_id, scopes, response["device_code"]))
+		TokenCache.save_token(token_path, token)
+	# Use the link printed to the console to login.
+	# I recommend adding a QR-Code generator addon and displaying that on the screen to the user.
+	#var token : UserAccessToken = await(auth.login(client_id, scopes, response["device_code"]))
 	if (token == null):
 		# Authentication failed. Abort.
 		return
@@ -41,8 +48,6 @@ func _ready() -> void:
 	irc = TwitchIRCConnection.new(id)
 	api = TwitchAPIConnection.new(id)
 	iconloader = TwitchIconDownloader.new(api)
-	# For everything to work, the id connection has to be polled regularly.
-	get_tree().process_frame.connect(id.poll)
 
 	# Connect to the Twitch chat.
 	if(!await(irc.connect_to_irc(username))):
@@ -77,13 +82,13 @@ func _ready() -> void:
 	# This part of the example only works if GIFT is logged in to your broadcaster account.
 	# If you are, you can uncomment this to also try receiving follow events.
 	# Don't forget to also add the 'moderator:read:followers' scope to your token.
-#	eventsub = TwitchEventSubConnection.new(api)
-#	await(eventsub.connect_to_eventsub())
-#	eventsub.event.connect(on_event)
-#	var user_ids : Dictionary = await(api.get_users_by_name([username]))
-#	if (user_ids.has("data") && user_ids["data"].size() > 0):
-#		var user_id : String = user_ids["data"][0]["id"]
-#		eventsub.subscribe_event("channel.follow", "2", {"broadcaster_user_id": user_id, "moderator_user_id": user_id})
+	#eventsub = TwitchEventSubConnection.new(api)
+	#await(eventsub.connect_to_eventsub())
+	#eventsub.event.connect(on_event)
+	#var user_ids : Dictionary = await(api.get_users_by_name([username]))
+	#if (user_ids.has("data") && user_ids["data"].size() > 0):
+		#var user_id : String = user_ids["data"][0]["id"]
+		#eventsub.subscribe_event("channel.follow", "2", {"broadcaster_user_id": user_id, "moderator_user_id": user_id})
 
 func hello(cmd_info : CommandInfo) -> void:
 	irc.chat("Hello World!")

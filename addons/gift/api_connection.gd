@@ -1,21 +1,34 @@
 class_name TwitchAPIConnection
 extends RefCounted
 
-signal received_response(response)
+signal received_response(response : String)
+signal requested(request : GiftRequest)
 
 var id_conn : TwitchIDConnection
 
 var client : HTTPClient = HTTPClient.new()
 var client_response : PackedByteArray = []
+var mock : bool = false
 
-func _init(id_connection : TwitchIDConnection) -> void:
-	client.blocking_mode_enabled = true
+var queue : Array = []
+
+func _init(id_connection : TwitchIDConnection, twitch_cli_url : String = "") -> void:
 	id_conn = id_connection
 	id_conn.polled.connect(poll)
+	#if (id_connection is TwitchCLI):
+		#mock = true
+		#if (twitch_cli_url == ""):
+			#twitch_cli_url = "localhost:%s" % ProjectSettings.get_setting("gift/twitch_cli/twitch_cli_mock_api_port")
+		#client.connect_to_host(twitch_cli_url)
+	#else:
 	client.connect_to_host("https://api.twitch.tv", -1, TLSOptions.client())
 
 func poll() -> void:
 	client.poll()
+	if (!queue.is_empty() && client.get_status() == HTTPClient.STATUS_CONNECTED):
+		var request : GiftRequest = queue.pop_front()
+		requested.emit(request)
+		client.request(request.method, "/mock" if mock else "/helix" + request.url, request.headers, request.body)
 	if (client.get_status() == HTTPClient.STATUS_BODY):
 		client_response += client.read_response_body_chunk()
 	elif (!client_response.is_empty()):
@@ -23,7 +36,11 @@ func poll() -> void:
 		client_response.clear()
 
 func request(method : int, url : String, headers : PackedStringArray, body : String = "") -> Dictionary:
-	client.request(method, url, headers, body)
+	var request : GiftRequest = GiftRequest.new(method, url, headers, body)
+	queue.append(request)
+	var req : GiftRequest = await(requested)
+	while (req != request):
+		req = await(requested)
 	var response = await(received_response)
 	match (client.get_response_code()):
 		401:
@@ -36,14 +53,14 @@ func get_channel_chat_badges(broadcaster_id : String) -> Dictionary:
 		"Authorization: Bearer %s" % id_conn.last_token.token,
 		"Client-Id: %s" % id_conn.last_token.last_client_id
 	]
-	return await(request(HTTPClient.METHOD_GET,"/helix/chat/badges?broadcaster_id=%s" % broadcaster_id, headers))
+	return await(request(HTTPClient.METHOD_GET, "/chat/badges?broadcaster_id=%s" % broadcaster_id, headers))
 
 func get_global_chat_badges() -> Dictionary:
 	var headers : PackedStringArray = [
 		"Authorization: Bearer %s" % id_conn.last_token.token,
 		"Client-Id: %s" % id_conn.last_token.last_client_id
 	]
-	return await(request(HTTPClient.METHOD_GET,"/helix/chat/badges/global", headers))
+	return await(request(HTTPClient.METHOD_GET, "/chat/badges/global", headers))
 
 # Create a eventsub subscription. For the data required, refer to https://dev.twitch.tv/docs/eventsub/eventsub-subscription-types/
 func create_eventsub_subscription(subscription_data : Dictionary) -> Dictionary:
@@ -52,7 +69,7 @@ func create_eventsub_subscription(subscription_data : Dictionary) -> Dictionary:
 		"Client-Id: %s" % id_conn.last_token.last_client_id,
 		"Content-Type: application/json"
 	]
-	var response = await(request(HTTPClient.METHOD_POST, "/helix/eventsub/subscriptions", headers, JSON.stringify(subscription_data)))
+	var response = await(request(HTTPClient.METHOD_POST, "/eventsub/subscriptions", headers, JSON.stringify(subscription_data)))
 	match (client.get_response_code()):
 		400:
 			print("Bad Request! Check the data you specified.")
@@ -79,20 +96,22 @@ func get_users(names : Array[String], ids : Array[String]) -> Dictionary:
 		"Authorization: Bearer %s" % id_conn.last_token.token,
 		"Client-Id: %s" % id_conn.last_token.last_client_id
 	]
+	var response
 	if (names.is_empty() && ids.is_empty()):
-		return {}
-	var params = "?"
-	if (names.size() > 0):
-		params += "login=%s" % names.pop_back()
-		while(names.size() > 0):
-			params += "&login=%s" % names.pop_back()
-	if (params.length() > 1):
-		params += "&"
-	if (ids.size() > 0):
-		params += "id=%s" % ids.pop_back()
-		while(ids.size() > 0):
-			params += "&id=%s" % ids.pop_back()
-	var response = await(request(HTTPClient.METHOD_GET,"/helix/users/%s" % params, headers))
+		response = await(request(HTTPClient.METHOD_GET, "/users/", headers))
+	else:
+		var params = "?"
+		if (names.size() > 0):
+			params += "login=%s" % names.pop_back()
+			while(names.size() > 0):
+				params += "&login=%s" % names.pop_back()
+		if (params.length() > 1):
+			params += "&"
+		if (ids.size() > 0):
+			params += "id=%s" % ids.pop_back()
+			while(ids.size() > 0):
+				params += "&id=%s" % ids.pop_back()
+		response = await(request(HTTPClient.METHOD_GET, "/users/%s" % params, headers))
 	match (client.get_response_code()):
 		400:
 			id_conn.token_invalid.emit()
@@ -113,7 +132,7 @@ func send_whisper(from_user_id : String, to_user_id : String, message : String) 
 	var response: Dictionary = await(
 		request(
 			HTTPClient.METHOD_POST,
-			"/helix/whispers" + params,
+			"/whispers" + params,
 			headers,
 			JSON.stringify({"message": message})
 		)
