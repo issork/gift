@@ -9,8 +9,8 @@ static func load_token(token_path : String, scopes : Array[String] = []) -> Twit
 		var data : Dictionary = JSON.parse_string(file.get_as_text())
 		if (data.has("scope")):
 			var old_scopes = data["scope"]
-			for scope in old_scopes:
-				if (!scopes.has(scope)):
+			for scope in scopes:
+				if (!old_scopes.has(scope)):
 					return token
 			if (data.has("refresh_token")):
 				return RefreshableUserAccessToken.new(data, data["client_id"])
