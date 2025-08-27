@@ -11,6 +11,7 @@ var client_response : PackedByteArray = []
 var mock : bool = false
 
 var queue : Array = []
+var current_request : GiftRequest
 
 func _init(id_connection : TwitchIDConnection, twitch_cli_url : String = "") -> void:
 	id_conn = id_connection
@@ -25,15 +26,16 @@ func _init(id_connection : TwitchIDConnection, twitch_cli_url : String = "") -> 
 
 func poll() -> void:
 	client.poll()
-	if (!queue.is_empty() && client.get_status() == HTTPClient.STATUS_CONNECTED):
-		var request : GiftRequest = queue.pop_front()
-		requested.emit(request)
-		client.request(request.method, "/mock" if mock else "/helix" + request.url, request.headers, request.body)
+	if (!queue.is_empty() && client.get_status() == HTTPClient.STATUS_CONNECTED && current_request == null):
+		current_request = queue.pop_front()
+		requested.emit(current_request)
+		client.request(current_request.method, "/mock" if mock else "/helix" + current_request.url, current_request.headers, current_request.body)
 	if (client.get_status() == HTTPClient.STATUS_BODY):
 		client_response += client.read_response_body_chunk()
 	elif (!client_response.is_empty()):
 		received_response.emit(client_response.get_string_from_utf8())
 		client_response.clear()
+		current_request = null
 
 func request(method : int, url : String, headers : PackedStringArray, body : String = "") -> Dictionary:
 	var request : GiftRequest = GiftRequest.new(method, url, headers, body)

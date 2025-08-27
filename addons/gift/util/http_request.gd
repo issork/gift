@@ -1,8 +1,6 @@
 class_name GiftRequest
 extends RefCounted
 
-signal response
-
 var method : int
 var url : String
 var headers : PackedStringArray

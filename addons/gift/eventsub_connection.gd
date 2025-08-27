@@ -121,4 +121,4 @@ func subscribe_event(event_name : String, version : String, conditions : Diction
 		return
 	elif (response.is_empty()):
 		return
-	print("Now listening to '%s' events." % event_name)
+	print("Now listening to '%s' events." % response["data"][0]["type"])
