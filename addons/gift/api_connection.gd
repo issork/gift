@@ -16,12 +16,6 @@ var current_request : GiftRequest
 func _init(id_connection : TwitchIDConnection, twitch_cli_url : String = "") -> void:
 	id_conn = id_connection
 	id_conn.polled.connect(poll)
-	#if (id_connection is TwitchCLI):
-		#mock = true
-		#if (twitch_cli_url == ""):
-			#twitch_cli_url = "localhost:%s" % ProjectSettings.get_setting("gift/twitch_cli/twitch_cli_mock_api_port")
-		#client.connect_to_host(twitch_cli_url)
-	#else:
 	client.connect_to_host("https://api.twitch.tv", -1, TLSOptions.client())
 
 func poll() -> void:
@@ -43,12 +37,25 @@ func request(method : int, url : String, headers : PackedStringArray, body : Str
 	var req : GiftRequest = await(requested)
 	while (req != request):
 		req = await(requested)
-	var response = await(received_response)
-	match (client.get_response_code()):
-		401:
-			id_conn.token_invalid.emit()
+	var str_response : String = await(received_response)
+	var response = JSON.parse_string(str_response) if !str_response.is_empty() else {}
+	var response_code: int = client.get_response_code()
+	match (response_code):
+		200, 201, 202, 203, 204:
+			return response
+		_:
+			if (response_code == 401):
+				id_conn.token_invalid.emit()
+				print("Token invalid. Attempting to fetch a new token.")
+				if(await(id_conn.token_refreshed)):
+					for i in headers.size():
+						if (headers[i].begins_with("Authorization: Bearer")):
+							headers[i] = "Authorization: Bearer %s" % id_conn.last_token.token
+						elif (headers[i].begins_with("Client-Id:")):
+							headers[i] = "Client-Id: %s" % id_conn.last_token.last_client_id
+					return await(request(method, url, headers, body))
+			var msg : String = "Error %s: %s while calling (%s). Please check the Twitch API documnetation." % [str(response_code), response.get("message", "without message"), url]
 			return {}
-	return JSON.parse_string(response)
 
 func get_channel_chat_badges(broadcaster_id : String) -> Dictionary:
 	var headers : PackedStringArray = [
@@ -71,21 +78,7 @@ func create_eventsub_subscription(subscription_data : Dictionary) -> Dictionary:
 		"Client-Id: %s" % id_conn.last_token.last_client_id,
 		"Content-Type: application/json"
 	]
-	var response = await(request(HTTPClient.METHOD_POST, "/eventsub/subscriptions", headers, JSON.stringify(subscription_data)))
-	match (client.get_response_code()):
-		400:
-			print("Bad Request! Check the data you specified.")
-			return {}
-		403:
-			print("Forbidden! The access token is missing the required scopes.")
-			return {}
-		409:
-			print("Conflict! A subscription already exists for the specified event type and condition combination.")
-			return {}
-		429:
-			print("Too Many Requests! The request exceeds the number of subscriptions that you may create with the same combination of type and condition values.")
-			return {}
-	return response
+	return await(request(HTTPClient.METHOD_POST, "/eventsub/subscriptions", headers, JSON.stringify(subscription_data)))
 
 func get_users_by_id(ids : Array[String]) -> Dictionary:
 	return await(get_users([], ids))
@@ -99,10 +92,9 @@ func get_users(names : Array[String], ids : Array[String]) -> Dictionary:
 		"Client-Id: %s" % id_conn.last_token.last_client_id
 	]
 	var response
-	if (names.is_empty() && ids.is_empty()):
-		response = await(request(HTTPClient.METHOD_GET, "/users/", headers))
-	else:
-		var params = "?"
+	var params : String = ""
+	if (!names.is_empty() || !ids.is_empty()):
+		params = "?"
 		if (names.size() > 0):
 			params += "login=%s" % names.pop_back()
 			while(names.size() > 0):
@@ -113,16 +105,11 @@ func get_users(names : Array[String], ids : Array[String]) -> Dictionary:
 			params += "id=%s" % ids.pop_back()
 			while(ids.size() > 0):
 				params += "&id=%s" % ids.pop_back()
-		response = await(request(HTTPClient.METHOD_GET, "/users/%s" % params, headers))
-	match (client.get_response_code()):
-		400:
-			id_conn.token_invalid.emit()
-			return {}
-	return response
+	return await(request(HTTPClient.METHOD_GET, "/users/%s" % params, headers))
 
 # Send a whisper from user_id to target_id with the specified message.
 # Returns true on success or if the message was silently dropped, false on failure.
-func send_whisper(from_user_id : String, to_user_id : String, message : String) -> bool:
+func send_whisper(from_user_id : String, to_user_id : String, message : String) -> Dictionary:
 	var headers : PackedStringArray = [
 		"Authorization: Bearer %s" % id_conn.last_token.token,
 		"Client-Id: %s" % id_conn.last_token.last_client_id,
@@ -131,25 +118,4 @@ func send_whisper(from_user_id : String, to_user_id : String, message : String) 
 	var params: String = "?"
 	params += "from_user_id=%s" % from_user_id
 	params += "&to_user_id=%s" % to_user_id
-	var response: Dictionary = await(
-		request(
-			HTTPClient.METHOD_POST,
-			"/whispers" + params,
-			headers,
-			JSON.stringify({"message": message})
-		)
-	)
-	var response_code: int = client.get_response_code()
-	match (response_code):
-		# 200 is returned even if Twitch documentation says only 204
-		200, 204:
-			print("Success! The whisper was sent.")
-			return true
-		# Complete list of error codes according to Twitch documentation
-		400, 401, 403, 404, 429:
-			print("[Error (send_whisper)] %s - %s" % [response["status"], response["message"]])
-			return false
-		# Fallback for unknown response codes
-		_:
-			print("[Default (send_whisper)] %s " % response_code)
-			return false
+	return await(request(HTTPClient.METHOD_POST, "/whispers" + params, headers, JSON.stringify({"message": message})))
