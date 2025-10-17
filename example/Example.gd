@@ -10,7 +10,6 @@ extends Control
 @export var channel : String
 # The username of the bot account.
 @export var username : String
-@export_global_file var token_path : String = "user://.gift/token"
 
 var id : TwitchIDConnection
 var api : TwitchAPIConnection
@@ -29,16 +28,13 @@ func _ready() -> void:
 	# We want to be able to read and write messages, so we request the required scopes.
 	# See https://dev.twitch.tv/docs/authentication/scopes/#twitch-access-token-scopes
 	var scopes : PackedStringArray = ["chat:read", "chat:edit", "moderator:read:followers"]
-	var token : UserAccessToken = TokenCache.load_token(token_path, scopes)
-	if (token == null):
-		var auth : DeviceCodeGrantFlow = DeviceCodeGrantFlow.new()
-		var response := await(auth.request_login(client_id, scopes))
-		print(response["verification_uri"])
-		token = await(auth.login(client_id, scopes, response["device_code"]))
-		TokenCache.save_token(token_path, token)
+	var auth : DeviceCodeGrantFlow = DeviceCodeGrantFlow.new()
+	var response := await(auth.request_login(client_id, scopes))
+	print(response["verification_uri"])
+	var token : UserAccessToken = await(auth.login(client_id, scopes, response["device_code"]))
+	
 	# Use the link printed to the console to login.
 	# I recommend adding a QR-Code generator addon and displaying that on the screen to the user.
-	#var token : UserAccessToken = await(auth.login(client_id, scopes, response["device_code"]))
 	if (token == null):
 		# Authentication failed. Abort.
 		return
